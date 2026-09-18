@@ -3037,9 +3037,9 @@ count_feat_lastseentyp(
          */
     case DOOR:
         if (Is_knox(&u.uz)) {
-            int ty, tx = x - 4;
+            int ty;
 
-            /* Throne is four columns to left, either directly in
+            /* Throne is four columns away, either directly in
              * line or one row higher or lower, and doesn't have
              * to have been seen yet.
              *   ......|}}}.
@@ -3048,9 +3048,15 @@ count_feat_lastseentyp(
              *   ......|}}}.
              * For 3.6.0 and earlier, it was always in direct line:
              * both throne and door on the lower of the two rows.
+             * knox.lua does not set "noflipx", so flip_level_rnd()
+             * mirrors this level on about half of all games and the
+             * throne is then four columns to the RIGHT of the
+             * entrance; checking only x-4 loses the annotation for
+             * the whole game.
              */
             for (ty = y - 1; ty <= y + 1; ++ty)
-                if (isok(tx, ty) && IS_THRONE(levl[tx][ty].typ)) {
+                if ((isok(x - 4, ty) && IS_THRONE(levl[x - 4][ty].typ))
+                    || (isok(x + 4, ty) && IS_THRONE(levl[x + 4][ty].typ))) {
                     mptr->flags.ludios = 1;
                     break;
                 }
