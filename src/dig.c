@@ -362,10 +362,18 @@ dig(void)
         return 0;
     }
 
-    svc.context.digging.effort +=
-        10 + rn2(5) + abon() + uwep->spe - greatest_erosion(uwep) + u.udaminc;
-    if (Race_if(PM_DWARF))
-        svc.context.digging.effort *= 2;
+    {
+        int inc = 10 + rn2(5) + abon() + uwep->spe
+                  - greatest_erosion(uwep) + u.udaminc;
+
+        /* the dwarven bonus doubles this turn's progress; applying it to
+           svc.context.digging.effort instead would double the running
+           total every turn, making the advantage grow with the length of
+           the dig rather than staying at 2x */
+        if (Race_if(PM_DWARF))
+            inc *= 2;
+        svc.context.digging.effort += inc;
+    }
     if (svc.context.digging.down) {
         struct trap *ttmp = t_at(dpx, dpy);
 
