@@ -1507,6 +1507,13 @@ see_monsters(void)
             continue;
         if ((mon->mstate & MON_STILL_ARRIVING) != 0)
             continue;
+        /* a vault guard whose temporary corridor is being removed is
+           parked off the map at <0,0> by parkguard(), which states the
+           invariant "monster traversal loops should skip it"; the loops
+           in monmove.c, minion.c, sp_lev.c and wizard.c already do, but
+           this one did not, so newsym(0,0) tripped its own impossible() */
+        if (!mon->mx)
+            continue;
         newsym(mon->mx, mon->my);
         if (mon->wormno)
             see_wsegs(mon);
