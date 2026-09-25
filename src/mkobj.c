@@ -2327,7 +2327,10 @@ place_object(struct obj *otmp, coordxy x, coordxy y)
     assert(x >= 0 && x < COLNO && y >= 0 && y < ROWNO);
     otmp2 = svl.level.objects[x][y];
 
-    obj_no_longer_held(otmp);
+    /* objects being read back in from a level file were already on the
+       floor, so don't give a fixed crysknife another chance to revert */
+    if (!program_state.in_getlev)
+        obj_no_longer_held(otmp);
     if (otmp->otyp == BOULDER) {
         if (!otmp2 || otmp2->otyp != BOULDER)
             block_point(x, y); /* vision */
