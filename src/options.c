@@ -3088,7 +3088,8 @@ optfn_perminv_mode(
                     }
 #endif
                     iflags.perminv_mode = (uchar) i;
-                    iflags.perm_invent = TRUE;
+                    /* "none" means perm_invent is off */
+                    iflags.perm_invent = (i != InvOptNone);
                     break;
                 }
             }
