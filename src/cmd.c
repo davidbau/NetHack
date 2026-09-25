@@ -2352,7 +2352,9 @@ handler_rebind_keys_add(boolean keyfirst)
     npick = select_menu(win, PICK_ONE, &picks);
     destroy_nhwindow(win);
     if (npick > 0) {
-        struct Cmd_bind *prevcmd;
+        const struct ext_func_tab *prevcmd = (struct ext_func_tab *) 0;
+        struct Cmd_bind *prevbind;
+        boolean wasbound;
         char cmdstr[BUFSZ];
 
         i = picks->item.a_int;
@@ -2388,13 +2390,18 @@ handler_rebind_keys_add(boolean keyfirst)
                 return;
         }
 
-        prevcmd = cmdbind_get(key);
+        /* remember the command, not the binding; bind_key() either
+           overwrites the binding in place or frees it */
+        prevbind = cmdbind_get(key);
+        wasbound = (prevbind != 0);
+        if (wasbound)
+            prevcmd = prevbind->cmd;
 
         if (bind_key(key, cmdstr, TRUE)) {
-            if (prevcmd && prevcmd->cmd != ec) {
+            if (wasbound && prevcmd != ec) {
                 pline("Changed key '%s' from \"%s\" to \"%s\".",
-                      key2txt(key, buf2), prevcmd->cmd->ef_txt, cmdstr);
-            } else if (!prevcmd) {
+                      key2txt(key, buf2), prevcmd->ef_txt, cmdstr);
+            } else if (!wasbound) {
                 pline("Bound key '%s' to \"%s\".",
                       key2txt(key, buf2), cmdstr);
             }
