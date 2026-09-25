@@ -2145,7 +2145,7 @@ look_engrs(boolean nearby)
 {
     winid win;
     struct engr *e;
-    char lookbuf[BUFSZ], outbuf[BUFSZ];
+    char lookbuf[BUFSZ], outbuf[BUFSZ], obscbuf[QBUFSZ];
     coordxy x, y, lo_x, lo_y, hi_x, hi_y;
     boolean is_headstone;
     nhsym sym;
@@ -2156,7 +2156,7 @@ look_engrs(boolean nearby)
     /*assert(lo_x >= 1 && lo_y >= 0 && hi_x < MAXCO && hi_y < MAXLI);*/
     for (y = lo_y; y <= hi_y; y++) {
         for (x = lo_x; x <= hi_x; x++) {
-            lookbuf[0] = '\0';
+            lookbuf[0] = obscbuf[0] = '\0';
             if (!levl[x][y].seenv)
                 continue;
             /* this won't find remembered engravings which aren't there
@@ -2185,9 +2185,10 @@ look_engrs(boolean nearby)
                 /* engraving or grave+headstone shown on the map */
                 ++count;
             } else {
-                /* engraving or grave covered by object(s) */
-                Snprintf(eos(lookbuf), sizeof lookbuf - strlen(lookbuf),
-                         ", obscured by %s", encglyph(glyph));
+                /* engraving or grave covered by object(s); kept separate
+                   from lookbuf so that truncating the engraving text can't
+                   cut the encoded glyph in half */
+                Sprintf(obscbuf, ", obscured by %s", encglyph(glyph));
                 glyph = is_headstone ? cmap_to_glyph(S_grave)
                                      : engraving_to_glyph(e);
                 ++count;
@@ -2214,8 +2215,10 @@ look_engrs(boolean nearby)
                         coord_desc(x, y, coordbuf, cmode));
                 Sprintf(eos(outbuf), "%s ", encglyph(glyph));
                 /* guard against potential overflow */
-                lookbuf[sizeof lookbuf - 1 - strlen(outbuf)] = '\0';
+                lookbuf[sizeof lookbuf - 1 - strlen(outbuf)
+                        - strlen(obscbuf)] = '\0';
                 Strcat(outbuf, lookbuf);
+                Strcat(outbuf, obscbuf);
                 putmixed(win, 0, outbuf);
             }
         }
