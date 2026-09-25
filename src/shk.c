@@ -3216,16 +3216,16 @@ gem_learned(int oindx)
      */
     for (shkp = next_shkp(fmon, TRUE); shkp;
          shkp = next_shkp(shkp->nmon, TRUE)) {
-        ct = ESHK(shkp)->billct;
-        bp = ESHK(shkp)->bill_p;
-        while (--ct >= 0) {
+        for (ct = ESHK(shkp)->billct, bp = ESHK(shkp)->bill_p; ct > 0;
+             --ct, ++bp) {
+            /* used up items are on the billobjs list, which find_oid()
+               doesn't search, so they won't be found and aren't repriced */
             obj = find_oid(bp->bo_id);
-            if (!obj) /* shouldn't happen */
+            if (!obj)
                 continue;
             if ((oindx != STRANGE_OBJECT) ? (obj->otyp == oindx)
                                           : (obj->oclass == GEM_CLASS))
                 bp->price = get_cost(obj, shkp);
-            ++bp;
         }
     }
 }
