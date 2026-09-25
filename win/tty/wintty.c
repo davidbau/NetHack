@@ -4286,14 +4286,17 @@ static const enum statusfields
     { BL_FLUSH, blPAD, blPAD, blPAD, blPAD, blPAD, blPAD, blPAD,
       blPAD, blPAD, blPAD, blPAD, blPAD, blPAD, blPAD, blPAD }
 },
-    /* Align moved from 1 to 2, Leveldesc+Time+Cond+Vers moved from 2 to 3 */
+    /* Align moved from 1 to 2, Leveldesc+Time+Cond+Vers moved from 2 to 3;
+       on the 3rd row, conditions come after weapon, armor, and terrain
+       because render_status() might indent them to line up with hunger
+       and only 'version' is expected to follow them */
     threelineorder[3][MAX_PER_ROW] = {
     { BL_TITLE, BL_STR, BL_DX, BL_CO, BL_IN, BL_WI, BL_CH, BL_SCORE, BL_FLUSH,
       blPAD, blPAD, blPAD, blPAD, blPAD, blPAD, blPAD, blPAD, blPAD, blPAD },
     { BL_ALIGN, BL_GOLD, BL_HP, BL_HPMAX, BL_ENE, BL_ENEMAX,
       BL_AC, BL_XP, BL_EXP, BL_HD, BL_HUNGER, BL_CAP,
       BL_FLUSH, blPAD, blPAD, blPAD, blPAD, blPAD, blPAD },
-    { BL_LEVELDESC, BL_TIME, BL_CONDITION, BL_WEAPON, BL_ARMOR, BL_TERRAIN,
+    { BL_LEVELDESC, BL_TIME, BL_WEAPON, BL_ARMOR, BL_TERRAIN, BL_CONDITION,
       BL_VERS, BL_FLUSH, blPAD,
       blPAD, blPAD, blPAD, blPAD, blPAD, blPAD, blPAD, blPAD, blPAD, blPAD }
 };
