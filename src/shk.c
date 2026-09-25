@@ -5793,7 +5793,7 @@ block_door(coordxy x, coordxy y)
     int roomno = *in_rooms(x, y, SHOPBASE);
     struct monst *shkp;
 
-    if (roomno < 0 || !IS_SHOP(roomno))
+    if (roomno < ROOMOFFSET || !IS_SHOP(roomno - ROOMOFFSET))
         return FALSE;
     if (!IS_DOOR(levl[x][y].typ))
         return FALSE;
@@ -5834,7 +5834,7 @@ block_entry(coordxy x, coordxy y)
         return FALSE;
 
     roomno = *in_rooms(x, y, SHOPBASE);
-    if (roomno < 0 || !IS_SHOP(roomno))
+    if (roomno < ROOMOFFSET || !IS_SHOP(roomno - ROOMOFFSET))
         return FALSE;
     shkp = shop_keeper((char) roomno);
     if (!shkp || !inhishop(shkp))
