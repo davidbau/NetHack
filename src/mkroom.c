@@ -879,9 +879,25 @@ rest_room(NHFILE *nhfp, struct mkroom *r)
     Sfi_mkroom(nhfp, r, "room-mkroom");
 
     for (i = 0; i < r->nsubrooms; i++) {
-        r->sbrooms[i] = &gs.subrooms[gn.nsubroom];
-        rest_room(nhfp, &gs.subrooms[gn.nsubroom]);
-        gs.subrooms[gn.nsubroom++].resident = (struct monst *) 0;
+        struct mkroom tmproom;
+        int sidx;
+
+        /* Put each subroom back into the slot it was created in.
+           levl[][].roomno refers to a subroom by its slot, but
+           save_room() writes subrooms in parent-room order, and after
+           sort_rooms() that need not be the order they were made in;
+           restoring them into consecutive slots would leave the map
+           pointing at the wrong subrooms. */
+        rest_room(nhfp, &tmproom);
+        sidx = tmproom.roomnoidx - (MAXNROFROOMS + 1);
+        if (sidx < 0 || sidx >= MAXNROFROOMS) {
+            impossible("rest_room: bad subroom index %d", sidx);
+            sidx = gn.nsubroom;
+        }
+        gs.subrooms[sidx] = tmproom;
+        gs.subrooms[sidx].resident = (struct monst *) 0;
+        r->sbrooms[i] = &gs.subrooms[sidx];
+        gn.nsubroom++;
     }
 }
 
