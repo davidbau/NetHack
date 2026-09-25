@@ -602,6 +602,8 @@ restgamestate(NHFILE *nhfp)
     Sfi_int32(nhfp, &svw.wtreserved, "wtreserved");
     Sfi_you(nhfp, &u, "gamestate-you");
     gy.youmonst.cham = u.mcham;
+    gy.youmonst.m_ap_type = u.um_ap_type;
+    gy.youmonst.mappearance = u.umappearance;
 
 #ifndef SFCTOOL
     if (restoring_special && iflags.explore_error_flag) {

@@ -284,6 +284,10 @@ savegamestate(NHFILE *nhfp)
                                       urealtime.start_timing);
     Sfo_long(nhfp, &svw.wreserve, "wreserve");
     Sfo_int32(nhfp, &svw.wtreserved, "wtreserved");
+    /* youmonst isn't saved; keep hero's disguise (mimic hiding via
+       #monster) with u, the way u.mcham keeps youmonst.cham */
+    u.um_ap_type = gy.youmonst.m_ap_type;
+    u.umappearance = gy.youmonst.mappearance;
     Sfo_you(nhfp, &u, "gamestate-you");
     Sfo_char(nhfp, yyyymmddhhmmss(ubirthday), "gamestate-ubirthday", 14);
     Sfo_long(nhfp, &urealtime.realtime, "gamestate-realtime");

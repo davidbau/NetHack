@@ -502,6 +502,8 @@ struct you {
     struct skills weapon_skills[P_NUM_SKILLS];
     boolean twoweap;         /* KMH -- Using two-weapon combat */
     short mcham;             /* vampire mndx if shapeshifted to bat/cloud */
+    uchar um_ap_type;        /* youmonst.m_ap_type, for save/restore */
+    unsigned umappearance;   /* youmonst.mappearance, for save/restore */
     short umovement;         /* instead of youmonst.movement */
     schar uachieved[N_ACH];  /* list of achievements in the order attained */
     struct monst *umonst;    /* for future conversion of &gy.youmonst to u.umonst */
