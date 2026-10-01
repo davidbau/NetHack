@@ -111,6 +111,8 @@ a fixed crysknife on the floor got another chance to revert to a worm tooth
 the engravings list could cut the encoded map symbol of an object lying on a
 	long engraving in half and show the wrong symbol
 perminv_mode:none turned persistent inventory on instead of off
+identifying a gem did not reprice it on a shop bill when an earlier bill entry
+	was for a used-up item
 
 
 Platform- and/or Interface-Specific Fixes
