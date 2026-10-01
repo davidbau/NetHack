@@ -104,6 +104,8 @@ after a level with subrooms was saved and restored, the map could point at
 	the wrong subroom (a shop could stop charging for its goods)
 alter_cost() could loop forever looking for the shopkeeper whose bill held
 	an object
+farlook of a remembered engraving with very long text wrote past the end of
+	a buffer
 
 
 Platform- and/or Interface-Specific Fixes

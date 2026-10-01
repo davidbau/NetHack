@@ -1610,6 +1610,8 @@ do_screen_description(
             if (*(*firstmatch)) {
                 Sprintf(temp_buf, " (%s", *firstmatch);
                 (void) add_quoted_engraving(cc.x, cc.y, temp_buf, FALSE);
+                /* a long engraving can fill temp_buf; leave room for ')' */
+                temp_buf[sizeof temp_buf - 2] = '\0';
                 Strcat(temp_buf, ")");
                 (void) strncat(out_str, temp_buf,
                                BUFSZ - strlen(out_str) - 1);
