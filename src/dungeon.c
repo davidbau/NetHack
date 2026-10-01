@@ -2642,6 +2642,18 @@ load_exclusions(NHFILE *nhfp)
         ez->next = sve.exclusion_zones;
         sve.exclusion_zones = ez;
     }
+    /* the loop above prepends, reversing saved order; reverse once so
+       the restored chain matches the order that was written */
+    {
+        struct exclusion_zone *zprev = (struct exclusion_zone *) 0,
+                              *zcur = sve.exclusion_zones, *znxt;
+
+        while (zcur) {
+            znxt = zcur->next, zcur->next = zprev;
+            zprev = zcur, zcur = znxt;
+        }
+        sve.exclusion_zones = zprev;
+    }
 }
 
 #ifndef SFCTOOL

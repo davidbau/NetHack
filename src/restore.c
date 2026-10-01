@@ -1010,6 +1010,19 @@ rest_stairs(NHFILE *nhfp)
             newst->u_traversed = stway.u_traversed;
 #endif
     }
+#ifndef SFCTOOL
+    /* stairway_add() prepends; reverse once so the rebuilt chain
+       keeps the order that was saved */
+    {
+        stairway *sprev = (stairway *) 0, *scur = gs.stairs, *snxt;
+
+        while (scur) {
+            snxt = scur->next, scur->next = sprev;
+            sprev = scur, scur = snxt;
+        }
+        gs.stairs = sprev;
+    }
+#endif
 }
 
 void
@@ -1194,6 +1207,17 @@ getlev(NHFILE *nhfp, int pid, xint8 lev)
             break;
     }
     dealloc_trap(trap);
+    /* the loop above prepends, reversing saved order; reverse once so
+       the restored chain matches the order that was written */
+    {
+        struct trap *tprev = (struct trap *) 0, *tcur = gf.ftrap, *tnxt;
+
+        while (tcur) {
+            tnxt = tcur->ntrap, tcur->ntrap = tprev;
+            tprev = tcur, tcur = tnxt;
+        }
+        gf.ftrap = tprev;
+    }
 
     fobj = restobjchn(nhfp, FALSE);
     /* more work needs to be done on fobj in find_lev_obj() further down,
