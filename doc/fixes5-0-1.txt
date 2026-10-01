@@ -117,6 +117,8 @@ rebinding a key from the options menu never reported the change, and
 	unbinding one read the freed binding
 leaving and returning to a level, or saving and restoring, reversed the
 	order of its trap, stairway, engraving and exclusion-zone lists
+with two Lua callbacks on one event, the order they ran in, and the bytes
+	saved for Lua variables, changed from run to run
 
 
 Platform- and/or Interface-Specific Fixes

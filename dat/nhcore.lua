@@ -45,7 +45,15 @@ function nh_callback_run(cb, ...)
    if (type(nh_lua_variables[cbname]) ~= "table") then
       nh_lua_variables[cbname] = {};
    end
+   -- run the callbacks in a fixed order (by name): pairs() visits string
+   -- keys in an order that depends on Lua's per-process hash seed, so
+   -- which callback ran first, and could stop the others, varied by run
+   local names = {};
    for k, v in pairs(nh_lua_variables[cbname]) do
+      names[#names + 1] = k;
+   end
+   table.sort(names);
+   for _, k in ipairs(names) do
       if (not _G[k](table.unpack{...})) then
          return false;
       end

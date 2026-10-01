@@ -156,7 +156,15 @@ end
 -- return the (simple) table tbl converted into a string
 function table_stringify(tbl)
    local str = "";
-   for key, value in pairs(tbl) do
+   -- visit keys in sorted order so that the same table always produces
+   -- the same string; pairs() order depends on Lua's per-process seed
+   local keys = {};
+   for key in pairs(tbl) do
+      keys[#keys + 1] = key;
+   end
+   table.sort(keys, function(a, b) return tostring(a) < tostring(b) end);
+   for _, key in ipairs(keys) do
+      local value = tbl[key];
       local typ = type(value);
       if (typ == "table") then
          str = str .. "[\"" .. key .. "\"]=" .. table_stringify(value);
