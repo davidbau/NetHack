@@ -113,6 +113,8 @@ the engravings list could cut the encoded map symbol of an object lying on a
 perminv_mode:none turned persistent inventory on instead of off
 identifying a gem did not reprice it on a shop bill when an earlier bill entry
 	was for a used-up item
+rebinding a key from the options menu never reported the change, and
+	unbinding one read the freed binding
 
 
 Platform- and/or Interface-Specific Fixes
