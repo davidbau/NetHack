@@ -92,6 +92,8 @@ alias rings of constitution, strength, and damage, spellbook/scroll of
 	identification, amulet of flight
 pets left on another level no longer have their hunger postponed by the
 	time spent away
+#overview missed the Fort Ludios annotation when the level was flipped
+	horizontally
 
 
 Platform- and/or Interface-Specific Fixes
