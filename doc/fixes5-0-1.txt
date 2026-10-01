@@ -102,6 +102,8 @@ make_glib() marked the status line dirty only when Glib did not change, so the
 	"Slip" condition was not shown or cleared promptly
 after a level with subrooms was saved and restored, the map could point at
 	the wrong subroom (a shop could stop charging for its goods)
+alter_cost() could loop forever looking for the shopkeeper whose bill held
+	an object
 
 
 Platform- and/or Interface-Specific Fixes
