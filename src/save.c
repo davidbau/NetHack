@@ -307,6 +307,11 @@ savegamestate(NHFILE *nhfp)
         u.ustuck_mid = (u.ustuck) ? u.ustuck->m_id : 0;
         u.usteed_mid = (u.usteed) ? u.usteed->m_id : 0;
     }
+    /* youmonst isn't saved; carry the hero's disguise (hiding via #monster
+       while polymorphed into a mimic) in u, the way u.mcham carries
+       youmonst.cham, using a spare field so the save layout is unchanged */
+    u.uspare1 = ((long) gy.youmonst.mappearance << 8)
+                | (long) gy.youmonst.m_ap_type;
     Sfo_you(nhfp, &u, "gamestate-you");
 
     /* clear the in-memory value of these, now that they have been
@@ -314,6 +319,7 @@ savegamestate(NHFILE *nhfp)
      */
     u.ustuck_mid = 0;
     u.usteed_mid = 0;
+    u.uspare1 = 0L;
     Sfo_char(nhfp, yyyymmddhhmmss(ubirthday), "gamestate-ubirthday", 14);
     Sfo_long(nhfp, &urealtime.realtime, "gamestate-realtime");
     Sfo_char(nhfp, yyyymmddhhmmss(urealtime.start_timing), "gamestate-start_timing", 14);

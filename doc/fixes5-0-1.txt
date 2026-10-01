@@ -121,6 +121,8 @@ with two Lua callbacks on one event, the order they ran in, and the bytes
 	saved for Lua variables, changed from run to run
 a binding for the Delete key written by #saveoptions as BIND=<del>:...
 	was rejected as an unknown key when the file was read back
+saving and restoring a hero who was hiding as a mimic (#monster) lost the
+	disguise
 
 
 Platform- and/or Interface-Specific Fixes
