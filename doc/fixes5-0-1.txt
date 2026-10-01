@@ -98,6 +98,8 @@ re-entrant form changes during polymorph could delete a light source before
 	creating it, redo end-of-polymorph cleanup twice, or strip a reverted
 	hero's armor by the old form's rules
 #wizborn built its totals row but never displayed it
+make_glib() marked the status line dirty only when Glib did not change, so the
+	"Slip" condition was not shown or cleared promptly
 
 
 Platform- and/or Interface-Specific Fixes
