@@ -460,7 +460,7 @@ make_deaf(long xtime, boolean talk)
 void
 make_glib(int xtime)
 {
-    disp.botl |= (!Glib ^ !!xtime);
+    disp.botl |= (!!Glib ^ !!xtime);
     set_itimeout(&Glib, xtime);
     /* may change "(being worn)" to "(being worn; slippery)" or vice versa */
     if (uarmg)
