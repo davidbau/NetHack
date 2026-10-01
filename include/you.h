@@ -483,7 +483,8 @@ struct you {
     int ugifts;              /* number of artifacts bestowed */
     int ublessed, ublesscnt; /* blessing/duration from #pray */
     long umoney0;
-    long uspare1;
+    long uspare1;            /* hero's disguise across save/restore:
+                              * (mappearance << 8) | m_ap_type */
     long uexp, urexp;        /* exper pts for gaining levels and for score */
     long ucleansed;          /* to record moves when player was cleansed */
     long usleep;             /* sleeping; monstermove you last started */
