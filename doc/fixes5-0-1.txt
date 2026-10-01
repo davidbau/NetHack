@@ -308,6 +308,8 @@ idlecheckpoint config file option to update checkpoint files whenever an
 	seconds; helps ensure that a recover operation, if it turns out
 	to be needed, is much more current than the last level change;
 	support added for Windows console, Qt, and curses
+tty: with statuslines:3, weapon and armor status were blanked or overwritten
+	when a status condition was shown
 
 
 Platform- and/or Interface-Specific New Features
