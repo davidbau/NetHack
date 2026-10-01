@@ -119,6 +119,8 @@ leaving and returning to a level, or saving and restoring, reversed the
 	order of its trap, stairway, engraving and exclusion-zone lists
 with two Lua callbacks on one event, the order they ran in, and the bytes
 	saved for Lua variables, changed from run to run
+a binding for the Delete key written by #saveoptions as BIND=<del>:...
+	was rejected as an unknown key when the file was read back
 
 
 Platform- and/or Interface-Specific Fixes

@@ -7003,6 +7003,8 @@ txt2key(char *txt)
         return ' ';
     if (!strcmp(txt, "<esc>"))
         return '\033';
+    if (!strcmp(txt, "<del>")) /* key2txt() writes it for #saveoptions */
+        return '\177';
 
     /* handle things like \b and \7 and \mX */
     if (*txt == '\\') {
