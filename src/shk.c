@@ -1075,9 +1075,11 @@ shop_keeper(char rmno)
                correct the underlying svr.rooms[].resident issue but... */
             return (struct monst *) 0;
         }
-    } else {
-        if (!level_status.shkready) {
-            int hmm UNUSED = 1;
+    } else if (rmno >= ROOMOFFSET && !level_status.shkready) {
+        /* only a lookup of an actual room can be premature; for rmno
+           that names no room (0 from an empty u.ushops or in_rooms()),
+           a null result is correct no matter how far along the level is */
+        int hmm UNUSED = 1;
 #if (NH_DEVEL_STATUS != NH_STATUS_RELEASED \
      && NH_DEVEL_STATUS != NH_STATUS_POSTRELEASE)
          if (wizard)
@@ -1086,8 +1088,7 @@ shop_keeper(char rmno)
                         level_status.making, level_status.loading,
                         level_status.shkready, level_status.ready);
 #endif
-            nhUse(hmm);
-        }
+        nhUse(hmm);
     }
     return shkp;
 }
