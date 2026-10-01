@@ -106,6 +106,8 @@ alter_cost() could loop forever looking for the shopkeeper whose bill held
 	an object
 farlook of a remembered engraving with very long text wrote past the end of
 	a buffer
+a fixed crysknife on the floor got another chance to revert to a worm tooth
+	each time its level was read back from disk
 
 
 Platform- and/or Interface-Specific Fixes
