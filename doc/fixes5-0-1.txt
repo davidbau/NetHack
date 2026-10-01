@@ -94,6 +94,9 @@ pets left on another level no longer have their hunger postponed by the
 	time spent away
 #overview missed the Fort Ludios annotation when the level was flipped
 	horizontally
+re-entrant form changes during polymorph could delete a light source before
+	creating it, redo end-of-polymorph cleanup twice, or strip a reverted
+	hero's armor by the old form's rules
 
 
 Platform- and/or Interface-Specific Fixes
