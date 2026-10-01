@@ -108,6 +108,8 @@ farlook of a remembered engraving with very long text wrote past the end of
 	a buffer
 a fixed crysknife on the floor got another chance to revert to a worm tooth
 	each time its level was read back from disk
+the engravings list could cut the encoded map symbol of an object lying on a
+	long engraving in half and show the wrong symbol
 
 
 Platform- and/or Interface-Specific Fixes
