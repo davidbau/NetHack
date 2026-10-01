@@ -1613,7 +1613,7 @@ rest_engravings(NHFILE *nhfp)
     while (1) {
         Sfi_unsigned(nhfp, &lth, "engraving-engr_alloc");
         if (lth == 0)
-            return;
+            break;
         ep = newengr(lth);
         Sfi_engr(nhfp, ep, "engraving");
         szeach = ep->engr_szeach;
@@ -1637,6 +1637,17 @@ rest_engravings(NHFILE *nhfp)
          * normal levels as the player must have finished engraving
          * to be able to move again */
         ep->engr_time = svm.moves;
+    }
+    /* the loop above prepends, reversing saved order; reverse once so
+       the restored chain matches the order that was written */
+    {
+        struct engr *eprev = (struct engr *) 0, *ecur = head_engr, *enxt;
+
+        while (ecur) {
+            enxt = ecur->nxt_engr, ecur->nxt_engr = eprev;
+            eprev = ecur, ecur = enxt;
+        }
+        head_engr = eprev;
     }
 }
 
