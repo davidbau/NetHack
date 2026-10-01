@@ -3168,6 +3168,7 @@ doborn(void)
 
     putstr(datawin, 0, "");
     Sprintf(buf, fmt, ndied, nborn, ' ', "");
+    putstr(datawin, 0, buf);
 
     display_nhwindow(datawin, FALSE);
     destroy_nhwindow(datawin);

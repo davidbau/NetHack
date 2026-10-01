@@ -97,6 +97,7 @@ pets left on another level no longer have their hunger postponed by the
 re-entrant form changes during polymorph could delete a light source before
 	creating it, redo end-of-polymorph cleanup twice, or strip a reverted
 	hero's armor by the old form's rules
+#wizborn built its totals row but never displayed it
 
 
 Platform- and/or Interface-Specific Fixes
