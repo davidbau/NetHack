@@ -61,13 +61,24 @@ selection_clear(struct selectionvar *sel, int val)
     sel->bounds_dirty = FALSE;
 }
 
+/* copy the map of selection sel; a point with value -1 is stored as
+   a 0 byte, so dupstr() can stop short */
+char *
+selection_dupmap(struct selectionvar *sel)
+{
+    char *map = (char *) alloc((COLNO * ROWNO) + 1);
+
+    (void) memcpy(map, sel->map, (COLNO * ROWNO) + 1);
+    return map;
+}
+
 struct selectionvar *
 selection_clone(struct selectionvar *sel)
 {
     struct selectionvar *tmps = (struct selectionvar *) alloc(sizeof *tmps);
 
     *tmps = *sel;
-    tmps->map = dupstr(sel->map);
+    tmps->map = selection_dupmap(sel);
 
     return tmps;
 }
@@ -188,7 +199,7 @@ selection_setpoint(
     if (x < 0 || y < 0 || x >= sel->wid || y >= sel->hei)
         return;
 
-    if (c && !sel->bounds_dirty) {
+    if (c) {
         if (sel->bounds.lx > x)
             sel->bounds.lx = x;
         if (sel->bounds.ly > y)
@@ -198,9 +209,9 @@ selection_setpoint(
         if (sel->bounds.hy < y)
             sel->bounds.hy = y;
 
-    /* only set bounds_dirty if changing a point from 1 to 0; if changing
-       a point from 0 to 0, nothing has really changed with the bounds */
-    } else if (sel->map[sel->wid * y + x] != 0) {
+    /* only set bounds_dirty if clearing a point that was set; the bounds
+       are widened even when dirty, so they always contain every point */
+    } else if (selection_getpoint(x, y, sel)) {
         sel->bounds_dirty = TRUE;
     }
 

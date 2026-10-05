@@ -134,6 +134,8 @@ monsters hidden under objects became unhidden whenever their level was
 	reloaded (changing levels, restore, bones)
 duplicate option complaint for an element of a comma-separated OPTIONS list
 	reported "via alias: (null)" when a later element used an alias
+Lua selections: points set after a point was cleared were dropped by the
+	&, |, ~ and - operators; cloning a selection holding -1 overflowed
 
 
 Platform- and/or Interface-Specific Fixes

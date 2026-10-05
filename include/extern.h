@@ -2885,6 +2885,7 @@ extern void closelog(NHFILE *);
 extern struct selectionvar *selection_new(void);
 extern void selection_free(struct selectionvar *, boolean) NO_NNARGS;
 extern void selection_clear(struct selectionvar *, int) NONNULLARG1;
+extern char *selection_dupmap(struct selectionvar *) NONNULLARG1;
 extern struct selectionvar *selection_clone(struct selectionvar *) NONNULLARG1;
 extern void selection_getbounds(struct selectionvar *, NhRect *) NO_NNARGS;
 extern void selection_recalc_bounds(struct selectionvar *) NONNULLARG1;

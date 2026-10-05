@@ -101,7 +101,7 @@ l_selection_push_new(lua_State *L)
     lua_setmetatable(L, -2);
 
     *sel = *tmp;
-    sel->map = dupstr(tmp->map);
+    sel->map = selection_dupmap(tmp);
     selection_free(tmp, TRUE);
 
     return sel;
@@ -118,7 +118,7 @@ l_selection_push_copy(lua_State *L, struct selectionvar *tmp)
     lua_setmetatable(L, -2);
 
     *sel = *tmp;
-    sel->map = dupstr(tmp->map);
+    sel->map = selection_dupmap(tmp);
 }
 
 
@@ -143,7 +143,7 @@ l_selection_clone(lua_State *L)
     if (tmp->map)
         free(tmp->map);
     *tmp = *sel;
-    tmp->map = dupstr(sel->map);
+    tmp->map = selection_dupmap(sel);
     return 1;
 }
 
