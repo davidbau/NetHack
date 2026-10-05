@@ -1075,15 +1075,14 @@ get_table_boolean(lua_State *L, const char *name)
     static const char *const boolstr[] = {
         "true", "false", "yes", "no", NULL
     };
-    /* static const int boolstr2i[] = { TRUE, FALSE, TRUE, FALSE, -1 }; */
+    static const int boolstr2i[] = { TRUE, FALSE, TRUE, FALSE, -1 };
     int ltyp;
     int ret = -1;
 
     lua_getfield(L, -1, name);
     ltyp = lua_type(L, -1);
     if (ltyp == LUA_TSTRING) {
-        ret = luaL_checkoption(L, -1, NULL, boolstr);
-        /* nhUse(boolstr2i[0]); */
+        ret = boolstr2i[luaL_checkoption(L, -1, NULL, boolstr)];
     } else if (ltyp == LUA_TBOOLEAN) {
         ret = lua_toboolean(L, -1);
     } else if (ltyp == LUA_TNUMBER) {
