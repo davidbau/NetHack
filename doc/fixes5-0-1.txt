@@ -138,6 +138,8 @@ Lua selections: points set after a point was cleared were dropped by the
 	&, |, ~ and - operators; cloning a selection holding -1 overflowed
 tut-1.lua's OPTIONS=mention_decor was ignored because mention_decor was
 	still being deferred when the tutorial level was created
+tty: a message which followed one shown without being put into message
+	history could be appended past the right edge of the top line
 
 
 Platform- and/or Interface-Specific Fixes
