@@ -128,6 +128,8 @@ shop_keeper()'s readiness check reported "untrustworthy null shkp" when
 	while a special level emptied a container (the tutorial's large box)
 a shopkeeper at his post did not block a diagonal move through a broken shop
 	door: block_door() and block_entry() tested the wrong room for being a shop
+the water-surrounded vault's escape chest, meant to be unlocked when the
+	escape item is glass, could be locked (themerms.lua passed olocked)
 
 
 Platform- and/or Interface-Specific Fixes

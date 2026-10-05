@@ -796,7 +796,7 @@ xx|.....|xx
             if itmcls[ "material" ] == "glass" then
                   -- explicitly force chest to be unlocked
                   box = des.object({ id = "chest", coord = chest_spots[1],
-                                    olocked = "no" });
+                                    locked = false });
             else
                   -- accept random locked/unlocked state
                   box = des.object({ id = "chest", coord = chest_spots[1] });
