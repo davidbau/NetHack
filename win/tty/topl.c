@@ -258,9 +258,11 @@ update_topl(const char *bp)
 
     /* If there is room on the line, print message on same line */
     /* But messages like "You die..." deserve their own line */
+    /* Text shown by show_topl() isn't in gt.toplines, so don't append
+       to it; the length test below wouldn't count it */
     n0 = strlen(bp);
     if ((ttyDisplay->toplin == TOPLINE_NEED_MORE || skip)
-        && cw->cury == 0
+        && cw->cury == 0 && *gt.toplines
         /* room for --More-- */
         && n0 + (int) strlen(gt.toplines) + 3 < min(CO - 8, TBUFSZ)
         && (notdied = strncmp(bp, "You die", 7)) != 0) {
