@@ -976,7 +976,8 @@ symparse_find(const void *bstr_, const void *rec_)
         }
     }
 
-    return 0;
+    /* a table name that continues past bstr->len sorts after bstr */
+    return -(int) (*rec)->name[i];
 }
 
 /*
