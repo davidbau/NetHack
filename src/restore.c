@@ -1239,11 +1239,16 @@ getlev(NHFILE *nhfp, int pid, xint8 lev)
     for (x = 0; x < COLNO; x++)
         for (y = 0; y < ROWNO; y++)
             svl.level.monsters[x][y] = (struct monst *) 0;
+    /* find_lev_obj() needs set_residency() for shop_keeper(), and the
+       monster loop below needs svl.level.objects[][] for hideunder() */
+    for (mtmp = fmon; mtmp; mtmp = mtmp->nmon)
+        if (mtmp->isshk)
+            set_residency(mtmp, FALSE);
+    level_status.shkready = 1;
+    find_lev_obj();
     for (mtmp = fmon; mtmp; mtmp = mtmp->nmon) {
         if ((mtmp->mstate & TERRAIN_FALLOUT_MASK) != 0)
             gp.pending_terrain_effects |= (mtmp->mstate & TERRAIN_FALLOUT_MASK);
-        if (mtmp->isshk)
-            set_residency(mtmp, FALSE);
         /* set some monst fields to sane values when coming from a bones file */
         if (ghostly) {
             mtmp->movement = 0;
@@ -1287,11 +1292,6 @@ getlev(NHFILE *nhfp, int pid, xint8 lev)
         if (ghostly || (elapsed > 0L && elapsed > (long) rnd(10)))
             hide_monst(mtmp);
     }
-    level_status.shkready = 1;
-    /* post-5.0.0: this is now postponed until here so that it takes place
-       after set_residency() has been called */
-    find_lev_obj();
-
 #endif /* !SFCTOOL */
 
     restdamage(nhfp);
