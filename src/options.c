@@ -500,7 +500,6 @@ parseoptions(
     boolean retval = TRUE;
 
     duplicate = FALSE;
-    using_alias = FALSE;
     go.opt_initial = tinitial;
     go.opt_from_file = tfrom_file;
     /*
@@ -519,6 +518,8 @@ parseoptions(
         if (!parseoptions(op, go.opt_initial, go.opt_from_file))
             retval = FALSE;
     }
+    /* reset after the recursion; a later element may have used an alias */
+    using_alias = FALSE;
     if (strlen(opts) > BUFSZ / 2) {
         config_error_add("Option too long, max length is %i characters",
                          (BUFSZ / 2));

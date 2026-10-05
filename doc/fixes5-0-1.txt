@@ -132,6 +132,8 @@ the water-surrounded vault's escape chest, meant to be unlocked when the
 	escape item is glass, could be locked (themerms.lua passed olocked)
 monsters hidden under objects became unhidden whenever their level was
 	reloaded (changing levels, restore, bones)
+duplicate option complaint for an element of a comma-separated OPTIONS list
+	reported "via alias: (null)" when a later element used an alias
 
 
 Platform- and/or Interface-Specific Fixes
