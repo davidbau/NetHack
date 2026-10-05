@@ -126,6 +126,8 @@ saving and restoring a hero who was hiding as a mimic (#monster) lost the
 shop_keeper()'s readiness check reported "untrustworthy null shkp" when
 	asked about no room at all, e.g. obfree() with the hero outside any shop
 	while a special level emptied a container (the tutorial's large box)
+a shopkeeper at his post did not block a diagonal move through a broken shop
+	door: block_door() and block_entry() tested the wrong room for being a shop
 
 
 Platform- and/or Interface-Specific Fixes
