@@ -136,6 +136,8 @@ duplicate option complaint for an element of a comma-separated OPTIONS list
 	reported "via alias: (null)" when a later element used an alias
 Lua selections: points set after a point was cleared were dropped by the
 	&, |, ~ and - operators; cloning a selection holding -1 overflowed
+tut-1.lua's OPTIONS=mention_decor was ignored because mention_decor was
+	still being deferred when the tutorial level was created
 
 
 Platform- and/or Interface-Specific Fixes

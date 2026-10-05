@@ -573,6 +573,8 @@ maybe_do_tutorial(void)
         return;
 
     if (ask_do_tutorial()) {
+        /* tut-1.lua turns on mention_decor; let that take effect */
+        heed_this_option(opt_mention_decor);
         assign_level(&u.ucamefrom, &u.uz);
         iflags.nofollowers = TRUE;
         schedule_goto(&sp->dlevel, UTOTYPE_NONE,
