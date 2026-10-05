@@ -228,7 +228,7 @@ mapfrag_fromstr(char *str)
 {
     struct mapfragment *mf = (struct mapfragment *) alloc(sizeof *mf);
 
-    char *tmps;
+    char *tmps, *src, *dst;
 
     mf->data = dupstr(str);
 
@@ -249,6 +249,23 @@ mapfrag_fromstr(char *str)
         tmps = s1;
         mf->hei++;
     }
+    /* pad short rows with spaces so mapfrag_get() can find every row
+       at y * (wid + 1) */
+    tmps = mf->data;
+    dst = mf->data =
+        (char *) alloc((unsigned) (mf->hei * (mf->wid + 1) + 1));
+    for (src = tmps; *src; ) {
+        char *s1 = strchr(src, '\n');
+        int len = s1 ? (int) (s1 - src) : (int) strlen(src);
+
+        (void) memcpy(dst, src, len);
+        (void) memset(dst + len, ' ', mf->wid - len);
+        dst += mf->wid;
+        *dst++ = '\n';
+        src += len + (s1 ? 1 : 0);
+    }
+    *dst = '\0';
+    free(tmps);
     return mf;
 }
 

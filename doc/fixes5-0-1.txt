@@ -144,6 +144,8 @@ lua boolean options given as strings got the string's position in a list
 	rather than its value, so "true" meant false and "false" meant true
 symbol lookup matched a name that is a prefix of another name to the longer
 	one, so S_lava, S_ant, S_human and S_mimic set S_lavawall and others
+a des.map or mapfragment whose rows differed in length read the rows after a
+	short one shifted, and cells near the end past the end of the string
 
 
 Platform- and/or Interface-Specific Fixes
