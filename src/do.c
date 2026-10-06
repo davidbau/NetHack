@@ -1663,6 +1663,7 @@ goto_level(
     } else {
         free_luathemes(leaving_tutorial ? tut_themes : most_themes);
     }
+    harness_emit_mapstate_turn("leave_level"); /* mapstate v6 checkpoint */
     save_mode = nhfp->mode;
     nhfp->mode = cant_go_back ? FREEING : (WRITING | FREEING);
     savelev(nhfp, ledger_no(&u.uz));
@@ -1983,6 +1984,12 @@ goto_level(
     }
 
     assign_level(&u.uz0, &u.uz); /* reset u.uz0 */
+    /* Emit a hash-only mapstate checkpoint after level change.  The full
+       per-line ^md dump is a debugging aid only (it unrolls the whole
+       payload, defeating the compact-hash design and bloating committed
+       logs) -- harness_emit_mapstate_turn emits just the hash unless a
+       NETHACK_MAPSTATE=dump env override is set. */
+    harness_emit_mapstate_turn("after_goto_level");
 #ifdef INSURANCE
     save_currentstate();
 #endif

@@ -4256,6 +4256,13 @@ tty_raw_print_bold(const char *str)
 #endif
 }
 
+/* Harness (mapstate v6, #1724): the topline state for the mapstate hash. */
+int
+harness_tty_toplin(void)
+{
+    return ttyDisplay->toplin;
+}
+
 int
 tty_nhgetch(void)
 {

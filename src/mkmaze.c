@@ -706,6 +706,7 @@ fixup_special(void)
     if (gl.lregions)
         free((genericptr_t) gl.lregions), gl.lregions = 0;
     gn.num_lregions = 0;
+    harness_emit_mapstate_turn("after_levregions_fixup"); /* mapstate v6 checkpoint */
 }
 
 staticfn void

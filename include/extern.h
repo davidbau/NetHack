@@ -496,6 +496,11 @@ extern char paranoid_ynq(boolean, const char *, boolean);
 extern boolean paranoid_query(boolean, const char *);
 extern void makemap_prepost(boolean, boolean);
 extern const char *ecname_from_fn(int (*)(void));
+extern void harness_emit_mapstate_turn(const char *);
+/* mapstate v6 accessors for state kept file-static elsewhere */
+extern int harness_worm_segs(int, coordxy *, coordxy *, int);
+extern long harness_wgrowtime(int);
+extern int harness_tty_toplin(void);
 
 /* ### date.c ### */
 

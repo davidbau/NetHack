@@ -3905,6 +3905,7 @@ lspo_level_init(lua_State *L)
         init_lev.bg = (init_lev.init_style == LVLINIT_SWAMP) ? MOAT : STONE;
 
     splev_initlev(&init_lev);
+    harness_emit_mapstate_turn("after_level_init"); /* mapstate v6 checkpoint */
 
     return 0;
 }
@@ -6071,6 +6072,7 @@ lspo_finalize_level(lua_State *L)
      */
     if (!svl.level.flags.corrmaze)
         wallification(1, 0, COLNO - 1, ROWNO - 1);
+    harness_emit_mapstate_turn("after_wallification"); /* mapstate v6 checkpoint */
 
     if (L)
         flip_level_rnd(gc.coder->allow_flips, FALSE);
@@ -6094,6 +6096,7 @@ lspo_finalize_level(lua_State *L)
     }
 
     makemap_prepost(FALSE, wtower);
+    harness_emit_mapstate_turn("after_finalize"); /* mapstate v6 checkpoint */
     iflags.lua_testing = FALSE;
     return 0;
 }
@@ -6349,6 +6352,7 @@ TODO: gc.coder->croom needs to be updated
     /* return selection where map locations were put */
     l_selection_push_copy(L, sel);
     selection_free(sel, TRUE);
+    harness_emit_mapstate_turn("after_map"); /* mapstate v6 checkpoint */
 
     return 1;
 }
@@ -6513,6 +6517,7 @@ load_special(const char *name)
      */
     if (!svl.level.flags.corrmaze)
         wallification(1, 0, COLNO - 1, ROWNO - 1);
+    harness_emit_mapstate_turn("after_wallification_special"); /* mapstate v6 checkpoint */
 
     flip_level_rnd(gc.coder->allow_flips, FALSE);
 
@@ -6527,6 +6532,7 @@ load_special(const char *name)
 
     if (gc.coder->premapped)
         premap_detect();
+    harness_emit_mapstate_turn("after_finalize_special"); /* mapstate v6 checkpoint */
 
     result = TRUE;
  give_up:

@@ -92,6 +92,32 @@ static long wgrowtime[MAX_NUM_WORMS] = DUMMY;
  *
  *  Implementation is left to the interested hacker.
  */
+/* Harness (mapstate v6, #1724): the tail segments of long worm wnum,
+   tail first, ending with the head segment.  Stores up to max of them in
+   xs/ys and returns how many there are. */
+int
+harness_worm_segs(int wnum, coordxy *xs, coordxy *ys, int max)
+{
+    struct wseg *seg;
+    int n = 0;
+
+    for (seg = wtails[wnum]; seg; seg = seg->nseg) {
+        if (n < max) {
+            xs[n] = seg->wx;
+            ys[n] = seg->wy;
+        }
+        n++;
+    }
+    return n;
+}
+
+/* Harness (mapstate v6): when long worm wnum next grows. */
+long
+harness_wgrowtime(int wnum)
+{
+    return wgrowtime[wnum];
+}
+
 int
 get_wormno(void)
 {

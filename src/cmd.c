@@ -152,6 +152,629 @@ staticfn int dummyfunction(void);
 
 static const char *readchar_queue = "";
 
+/* ---- Unified mapdump / mapstate per-turn system ---- */
+
+/* NETHACK_MAPSTATE: "0" turns the state walk off, "dump" adds the ^md.*
+   detail to every hash, and anything else (the default, "hash") emits the
+   hash alone.  js/mapstate.js reads it the same way. */
+staticfn boolean
+mapstate_enabled(void)
+{
+    const char *ev = harness_getenv("NETHACK_MAPSTATE");
+
+    return (ev && !strcmp(ev, "0")) ? FALSE : TRUE;
+}
+
+staticfn boolean
+mapstate_dump_all(void)
+{
+    const char *ev = harness_getenv("NETHACK_MAPSTATE");
+
+    return (ev && !strcmp(ev, "dump")) ? TRUE : FALSE;
+}
+
+staticfn unsigned long long
+fnv1a64_update(unsigned long long h, const char *s)
+{
+    const unsigned char *p = (const unsigned char *) s;
+    while (*p) {
+        h ^= (unsigned long long) *p++;
+        h *= 1099511628211ULL;
+    }
+    return h;
+}
+
+/* Growable text buffer for building canonical payload */
+struct pbuf { char *data; int len, cap; };
+
+staticfn void pbuf_init(struct pbuf *b) {
+    b->cap = 8192; b->len = 0;
+    b->data = (char *) alloc((unsigned) b->cap);
+    b->data[0] = '\0';
+}
+staticfn void pbuf_free(struct pbuf *b) {
+    if (b->data) free((genericptr_t) b->data);
+    b->data = 0; b->len = b->cap = 0;
+}
+staticfn void pbuf_append(struct pbuf *b, const char *s) {
+    int slen = (int) strlen(s);
+    while (b->len + slen + 1 > b->cap) {
+        int nc = b->cap * 2;
+        char *nd = (char *) alloc((unsigned) nc);
+        memcpy(nd, b->data, (size_t) b->len);
+        free((genericptr_t) b->data);
+        b->data = nd; b->cap = nc;
+    }
+    memcpy(b->data + b->len, s, (size_t) slen);
+    b->len += slen; b->data[b->len] = '\0';
+}
+staticfn void pb_num(struct pbuf *b, const char *key, long v) {
+    char buf[160]; Sprintf(buf, "%s=%ld\n", key, v); pbuf_append(b, buf);
+}
+/* v6: escape backslash, double quote and newline so that every value
+   stays on its one payload line (an engraving can hold any of them). */
+staticfn void pb_str(struct pbuf *b, const char *key, const char *v) {
+    char one[3];
+    pbuf_append(b, key); pbuf_append(b, "=\"");
+    for (; v && *v; v++) {
+        if (*v == '\\' || *v == '"') {
+            one[0] = '\\'; one[1] = *v; one[2] = '\0';
+        } else if (*v == '\n') {
+            one[0] = '\\'; one[1] = 'n'; one[2] = '\0';
+        } else {
+            one[0] = *v; one[1] = '\0';
+        }
+        pbuf_append(b, one);
+    }
+    pbuf_append(b, "\"\n");
+}
+
+/* Emit a comma-separated grid of integers as key=v0,v1,...\n
+   Used for levl[][] grid fields in x-major order (x=0..COLNO-1, y=0..ROWNO-1). */
+staticfn void pb_csv_grid(struct pbuf *b, const char *key,
+                          long (*getter)(int, int)) {
+    int x, y, first = 1;
+    char buf[32];
+    pbuf_append(b, key);
+    pbuf_append(b, "=");
+    for (x = 0; x < COLNO; x++) {
+        for (y = 0; y < ROWNO; y++) {
+            if (!first) pbuf_append(b, ",");
+            first = 0;
+            Sprintf(buf, "%ld", getter(x, y));
+            pbuf_append(b, buf);
+        }
+    }
+    pbuf_append(b, "\n");
+}
+
+/* Grid getter functions for pb_csv_grid */
+staticfn long grid_typ(int x, int y) { return (long) levl[x][y].typ; }
+staticfn long grid_flags(int x, int y) { return (long) levl[x][y].flags; }
+staticfn long grid_horizontal(int x, int y) { return levl[x][y].horizontal ? 1L : 0L; }
+staticfn long grid_lit(int x, int y) { return levl[x][y].lit ? 1L : 0L; }
+staticfn long grid_roomno(int x, int y) { return (long) levl[x][y].roomno; }
+staticfn long grid_edge(int x, int y) { return levl[x][y].edge ? 1L : 0L; }
+
+/* Parse turn range from env: "2-5" or "2" or "" */
+staticfn boolean
+mapdump_turn_in_range(long turn)
+{
+    static long lo = -1, hi = -1;
+    if (lo < 0) {
+        const char *ev = harness_getenv("NETHACK_MAPDUMP_TURNS");
+        if (ev) {
+            lo = atol(ev);
+            const char *dash = strchr(ev, '-');
+            hi = dash ? atol(dash + 1) : lo;
+            if (hi < lo) hi = lo;
+        } else {
+            lo = hi = 0; /* disabled */
+        }
+    }
+    return (lo > 0 && turn >= lo && turn <= hi);
+}
+
+/* Mapstate schema version. Bump this when fields are added/removed/
+   reordered — all canonical session recordings must be regenerated.
+   v4: hero invent[] now recurses into container contents (contents_count
+   + per-item oid/otyp/oclass/quan), mirroring the existing fobj[] block,
+   so a divergence in a carried container's contents is caught directly.
+   v5: mid-turn control-flow state — hero.next_attrib_check,
+   hero.has_occupation, xlock.{usedtime,chance,picktyp,magic_key,
+   has_door,has_box,box_oid}.  Motivated by #1075 (nao-hea picklock
+   resume-vs-fresh branch fork on desynced xlock.usedtime).
+   v6: mapstate becomes the only state walk in the harness (#1724) and
+   supersets the retired checkpoint JSON: hero luck/trap/strength/
+   encumbrance and property flags; the real tty toplin (inmore dropped:
+   it is only nonzero inside more(), where no mapstate is emitted);
+   monster disguise/hiding/visibility fields; one object serializer
+   with the full field set for every chain; worm tail segments; rooms,
+   subrooms, doors and the up/down destination areas; escaped strings.  Also emitted at every level-generation
+   checkpoint and on leaving a level, with phase and level in the event
+   text. */
+#define MAPSTATE_SCHEMA_VERSION 6
+
+/* v6: one serializer for every object, wherever it lives: the floor
+   chain, the hero's inventory, a monster's inventory, or a container
+   (recursively).  Only floor objects carry x/y and nexthere, since a
+   carried object's ox/oy is a stale leftover. */
+staticfn void
+pb_obj(struct pbuf *pb, const char *pfx, struct obj *o, boolean on_floor)
+{
+    char key[BUFSZ];
+#define PB_OBJ(field, val) \
+    (Snprintf(key, sizeof key, "%s.%s", pfx, field), pb_num(pb, key, (long) (val)))
+    PB_OBJ("oid", o->o_id);
+    PB_OBJ("otyp", o->otyp);
+    PB_OBJ("oclass", o->oclass);
+    PB_OBJ("where", o->where);
+    if (on_floor) {
+        PB_OBJ("x", o->ox);
+        PB_OBJ("y", o->oy);
+    }
+    PB_OBJ("quan", o->quan);
+    PB_OBJ("spe", o->spe);
+    PB_OBJ("blessed", o->blessed);
+    PB_OBJ("cursed", o->cursed);
+    PB_OBJ("oartifact", o->oartifact);
+    PB_OBJ("no_charge", o->no_charge);
+    PB_OBJ("unpaid", o->unpaid);
+    PB_OBJ("owornmask", o->owornmask);
+    PB_OBJ("invlet", o->invlet);
+    PB_OBJ("owt", o->owt);
+    /* A gem's corpsenm is read nowhere in C: mksobj_init() zeroes it
+       ("LOADSTONE hack") and an object made without init keeps NON_PM,
+       a difference nothing can observe and a restored level cannot know.
+       Record it as 0 so the hash compares only observable state. */
+    PB_OBJ("corpsenm", o->oclass == GEM_CLASS ? 0 : o->corpsenm);
+    PB_OBJ("age", o->age);
+    PB_OBJ("known", o->known);
+    PB_OBJ("dknown", o->dknown);
+    PB_OBJ("bknown", o->bknown);
+    PB_OBJ("rknown", o->rknown);
+    PB_OBJ("cknown", o->cknown);
+    PB_OBJ("lknown", o->lknown);
+    PB_OBJ("tknown", o->tknown);
+    PB_OBJ("olocked", o->olocked);
+    PB_OBJ("obroken", o->obroken);
+    PB_OBJ("otrapped", o->otrapped);
+    PB_OBJ("oeroded", o->oeroded);
+    PB_OBJ("oeroded2", o->oeroded2);
+    PB_OBJ("nobj_oid", o->nobj ? o->nobj->o_id : 0);
+    if (on_floor)
+        PB_OBJ("nexthere_oid", o->nexthere ? o->nexthere->o_id : 0);
+    if (Has_contents(o)) {
+        struct obj *c;
+        char cpfx[BUFSZ];
+        int ci = 0;
+
+        for (c = o->cobj; c; c = c->nobj)
+            ++ci;
+        PB_OBJ("contents_count", ci);
+        ci = 0;
+        for (c = o->cobj; c; c = c->nobj, ++ci) {
+            Snprintf(cpfx, sizeof cpfx, "%s.contents[%d]", pfx, ci);
+            pb_obj(pb, cpfx, c, FALSE);
+        }
+    }
+#undef PB_OBJ
+}
+
+/* v6: a room or subroom (struct mkroom) */
+staticfn void
+pb_room(struct pbuf *pb, const char *pfx, struct mkroom *r)
+{
+    char key[BUFSZ];
+#define PB_ROOM(field, val) \
+    (Snprintf(key, sizeof key, "%s.%s", pfx, field), pb_num(pb, key, (long) (val)))
+    PB_ROOM("lx", r->lx);
+    PB_ROOM("hx", r->hx);
+    PB_ROOM("ly", r->ly);
+    PB_ROOM("hy", r->hy);
+    PB_ROOM("rtype", r->rtype);
+    PB_ROOM("orig_rtype", r->orig_rtype);
+    PB_ROOM("rlit", r->rlit);
+    PB_ROOM("doorct", r->doorct);
+    PB_ROOM("fdoor", r->fdoor);
+    PB_ROOM("nsubrooms", r->nsubrooms);
+    PB_ROOM("irregular", r->irregular);
+    PB_ROOM("roomnoidx", r->roomnoidx);
+    PB_ROOM("resident_mid", r->resident ? r->resident->m_id : 0);
+#undef PB_ROOM
+}
+
+/* v6: a non-stairway level-change area (struct dest_area) */
+staticfn void
+pb_dest(struct pbuf *pb, const char *pfx, dest_area *d)
+{
+    char key[BUFSZ];
+#define PB_DEST(field, val) \
+    (Snprintf(key, sizeof key, "%s.%s", pfx, field), pb_num(pb, key, (long) (val)))
+    PB_DEST("lx", d->lx);
+    PB_DEST("ly", d->ly);
+    PB_DEST("hx", d->hx);
+    PB_DEST("hy", d->hy);
+    PB_DEST("nlx", d->nlx);
+    PB_DEST("nly", d->nly);
+    PB_DEST("nhx", d->nhx);
+    PB_DEST("nhy", d->nhy);
+#undef PB_DEST
+}
+
+/* Build the canonical mapdump payload for the current turn. */
+staticfn void
+build_mapdump(struct pbuf *pb, const char *phase)
+{
+    struct monst *mtmp;
+    struct obj *otmp;
+    int objcount, i;
+    char key[64];
+
+    pb_num(pb, "v", (long) MAPSTATE_SCHEMA_VERSION);
+    pb_str(pb, "phase", phase && *phase ? phase : "turn");
+    pb_num(pb, "turn", (long) svm.moves);
+    pb_num(pb, "dungeon.dnum", (long) u.uz.dnum);
+    pb_num(pb, "dungeon.dlevel", (long) u.uz.dlevel);
+
+    pb_num(pb, "hero.ux", (long) u.ux);
+    pb_num(pb, "hero.uy", (long) u.uy);
+    pb_num(pb, "hero.dx", (long) u.dx);
+    pb_num(pb, "hero.dy", (long) u.dy);
+    pb_num(pb, "hero.dz", (long) u.dz);
+    pb_num(pb, "hero.uhp", (long) u.uhp);
+    pb_num(pb, "hero.uhpmax", (long) u.uhpmax);
+    pb_num(pb, "hero.uen", (long) u.uen);
+    pb_num(pb, "hero.uenmax", (long) u.uenmax);
+    pb_num(pb, "hero.ulevel", (long) u.ulevel);
+    pb_num(pb, "hero.uac", (long) u.uac);
+    pb_num(pb, "hero.uhunger", (long) u.uhunger);
+    pb_num(pb, "hero.uhs", (long) u.uhs);
+    pb_num(pb, "hero.multi", (long) gm.multi);
+    pb_num(pb, "hero.context_move", svc.context.move ? 1L : 0L);
+    pb_num(pb, "hero.hero_seq", (long) gh.hero_seq);
+    pb_num(pb, "hero.umovement", (long) u.umovement);
+    pb_num(pb, "hero.str", (long) ABASE(A_STR));
+    pb_num(pb, "hero.int", (long) ABASE(A_INT));
+    pb_num(pb, "hero.wis", (long) ABASE(A_WIS));
+    pb_num(pb, "hero.dex", (long) ABASE(A_DEX));
+    pb_num(pb, "hero.con", (long) ABASE(A_CON));
+    pb_num(pb, "hero.cha", (long) ABASE(A_CHA));
+    pb_num(pb, "hero.uluck", (long) u.uluck);
+    pb_num(pb, "hero.ublesscnt", (long) u.ublesscnt);
+
+    /* v5: mid-turn control-flow state.  #1075 (nao-hea picklock desync)
+       proved xlock.usedtime and friends fork gameplay silently — one
+       engine took pick_lock's resume branch while the other took the
+       fresh ynq branch because usedtime was out of sync.
+       next_attrib_check drives exercise cadence; has_occupation catches
+       eatfood/dig/etc. drift the same way.  JS mirror lives at
+       js/mapstate.js (matching block just after hero.ublesscnt). */
+    pb_num(pb, "hero.next_attrib_check", (long) svc.context.next_attrib_check);
+    pb_num(pb, "hero.has_occupation", go.occupation ? 1L : 0L);
+    pb_num(pb, "xlock.usedtime", (long) gx.xlock.usedtime);
+    pb_num(pb, "xlock.chance", (long) gx.xlock.chance);
+    pb_num(pb, "xlock.picktyp", (long) gx.xlock.picktyp);
+    pb_num(pb, "xlock.magic_key", gx.xlock.magic_key ? 1L : 0L);
+    pb_num(pb, "xlock.has_door", gx.xlock.door ? 1L : 0L);
+    pb_num(pb, "xlock.has_box", gx.xlock.box ? 1L : 0L);
+    pb_num(pb, "xlock.box_oid", gx.xlock.box ? (long) gx.xlock.box->o_id : 0L);
+    /* v6 hero state carried over from the retired checkpoint JSON */
+    pb_num(pb, "hero.moreluck", (long) u.moreluck);
+    pb_num(pb, "hero.utrap", (long) u.utrap);
+    pb_num(pb, "hero.utraptype", (long) u.utraptype);
+    pb_num(pb, "hero.acurrstr", (long) ACURRSTR);
+    /* Not hero encumbrance: near_capacity() is not pure.  While boots of
+       levitation are being put on, calc_capacity() toggles their
+       levitation bit and calls float_vs_flight(), which sets disp.botl.
+       A state walk must never change state; encumbrance is derived from
+       the inventory and attributes recorded here anyway. */
+    pb_num(pb, "hero.fast", Fast ? 1L : 0L);
+    pb_num(pb, "hero.very_fast", Very_fast ? 1L : 0L);
+    pb_num(pb, "hero.blind", Blind ? 1L : 0L);
+    pb_num(pb, "hero.hallu", Hallucination ? 1L : 0L);
+    pb_num(pb, "hero.confused", Confusion ? 1L : 0L);
+    pb_num(pb, "hero.stunned", Stunned ? 1L : 0L);
+    pb_num(pb, "hero.fumbling", Fumbling ? 1L : 0L);
+    pb_num(pb, "hero.levitation", Levitation ? 1L : 0L);
+    pb_num(pb, "hero.flying", Flying ? 1L : 0L);
+    pb_num(pb, "hero.invis", Invis ? 1L : 0L);
+    pb_num(pb, "hero.see_invis", See_invisible ? 1L : 0L);
+    pb_num(pb, "hero.telepat", Blind_telepat ? 1L : 0L);
+    pb_num(pb, "hero.stealth", Stealth ? 1L : 0L);
+    pb_num(pb, "hero.aggravate", Aggravate_monster ? 1L : 0L);
+
+    pb_num(pb, "display.botl", disp.botl ? 1L : 0L);
+    pb_num(pb, "display.botlx", disp.botlx ? 1L : 0L);
+    pb_num(pb, "display.time_botl", disp.time_botl ? 1L : 0L);
+    /* v6: the tty topline state (C's ttyDisplay->toplin).  inmore is not
+       recorded: it is nonzero only inside more(), and no mapstate is
+       emitted there. */
+    pb_num(pb, "display.toplin", (long) harness_tty_toplin());
+
+    /* Monster chain */
+    i = 0;
+    for (mtmp = fmon; mtmp; mtmp = mtmp->nmon) ++i;
+    pb_num(pb, "fmon.count", (long) i);
+    i = 0;
+    for (mtmp = fmon; mtmp; mtmp = mtmp->nmon, ++i) {
+        Sprintf(key, "fmon[%d].mid", i); pb_num(pb, key, (long) mtmp->m_id);
+        Sprintf(key, "fmon[%d].mnum", i); pb_num(pb, key, (long) monsndx(mtmp->data));
+        Sprintf(key, "fmon[%d].x", i); pb_num(pb, key, (long) mtmp->mx);
+        Sprintf(key, "fmon[%d].y", i); pb_num(pb, key, (long) mtmp->my);
+        Sprintf(key, "fmon[%d].mhp", i); pb_num(pb, key, (long) mtmp->mhp);
+        Sprintf(key, "fmon[%d].movement", i); pb_num(pb, key, (long) mtmp->movement);
+        Sprintf(key, "fmon[%d].female", i); pb_num(pb, key, mtmp->female ? 1L : 0L);
+        Sprintf(key, "fmon[%d].mpeaceful", i); pb_num(pb, key, mtmp->mpeaceful ? 1L : 0L);
+        Sprintf(key, "fmon[%d].mtame", i); pb_num(pb, key, (long) mtmp->mtame);
+        Sprintf(key, "fmon[%d].msleeping", i); pb_num(pb, key, mtmp->msleeping ? 1L : 0L);
+        Sprintf(key, "fmon[%d].mcanmove", i); pb_num(pb, key, mtmp->mcanmove ? 1L : 0L);
+        Sprintf(key, "fmon[%d].mconf", i); pb_num(pb, key, mtmp->mconf ? 1L : 0L);
+        Sprintf(key, "fmon[%d].mstun", i); pb_num(pb, key, mtmp->mstun ? 1L : 0L);
+        Sprintf(key, "fmon[%d].mflee", i); pb_num(pb, key, mtmp->mflee ? 1L : 0L);
+        Sprintf(key, "fmon[%d].mfleetim", i); pb_num(pb, key, (long) mtmp->mfleetim);
+        Sprintf(key, "fmon[%d].minvis", i); pb_num(pb, key, mtmp->minvis ? 1L : 0L);
+        Sprintf(key, "fmon[%d].perminvis", i); pb_num(pb, key, mtmp->perminvis ? 1L : 0L);
+        Sprintf(key, "fmon[%d].mux", i); pb_num(pb, key, (long) mtmp->mux);
+        Sprintf(key, "fmon[%d].muy", i); pb_num(pb, key, (long) mtmp->muy);
+        Sprintf(key, "fmon[%d].nmon_mid", i); pb_num(pb, key, mtmp->nmon ? (long) mtmp->nmon->m_id : 0L);
+        /* Unhashed-but-game-affecting per-monster state.  mtrack is the
+           smoking-gun field for the seed9900 wall (mfndpos mtrack-skip
+           check at monmove.c:1989).  The rest capture monster-AI state
+           that earlier mapstate revisions missed. */
+        Sprintf(key, "fmon[%d].m_lev", i); pb_num(pb, key, (long) mtmp->m_lev);
+        Sprintf(key, "fmon[%d].mhpmax", i); pb_num(pb, key, (long) mtmp->mhpmax);
+        Sprintf(key, "fmon[%d].mstrategy", i); pb_num(pb, key, (long) mtmp->mstrategy);
+        Sprintf(key, "fmon[%d].mspec_used", i); pb_num(pb, key, (long) mtmp->mspec_used);
+        Sprintf(key, "fmon[%d].cham", i); pb_num(pb, key, (long) mtmp->cham);
+        Sprintf(key, "fmon[%d].mavenge", i); pb_num(pb, key, (long) mtmp->mavenge);
+        Sprintf(key, "fmon[%d].mblinded", i); pb_num(pb, key, (long) mtmp->mblinded);
+        Sprintf(key, "fmon[%d].mfrozen", i); pb_num(pb, key, (long) mtmp->mfrozen);
+        Sprintf(key, "fmon[%d].mtrapped", i); pb_num(pb, key, mtmp->mtrapped ? 1L : 0L);
+        Sprintf(key, "fmon[%d].meating", i); pb_num(pb, key, (long) mtmp->meating);
+        /* v6: disguise, hiding and visibility, from the checkpoint JSON */
+        Sprintf(key, "fmon[%d].invis_blkd", i); pb_num(pb, key, mtmp->invis_blkd ? 1L : 0L);
+        Sprintf(key, "fmon[%d].mundetected", i); pb_num(pb, key, mtmp->mundetected ? 1L : 0L);
+        Sprintf(key, "fmon[%d].m_ap_type", i); pb_num(pb, key, (long) mtmp->m_ap_type);
+        Sprintf(key, "fmon[%d].mappearance", i); pb_num(pb, key, (long) mtmp->mappearance);
+        Sprintf(key, "fmon[%d].canseemon", i); pb_num(pb, key, canseemon(mtmp) ? 1L : 0L);
+        { int t; for (t = 0; t < MTSZ; t++) {
+            Sprintf(key, "fmon[%d].mtrack[%d].x", i, t); pb_num(pb, key, (long) mtmp->mtrack[t].x);
+            Sprintf(key, "fmon[%d].mtrack[%d].y", i, t); pb_num(pb, key, (long) mtmp->mtrack[t].y);
+        }}
+        /* Monster inventory -- full per-item state. */
+        { int mc = 0; struct obj *mo; char opfx[BUFSZ];
+          for (mo = mtmp->minvent; mo; mo = mo->nobj) ++mc;
+          Sprintf(key, "fmon[%d].minvent_count", i); pb_num(pb, key, (long) mc);
+          mc = 0;
+          for (mo = mtmp->minvent; mo; mo = mo->nobj, ++mc) {
+              Snprintf(opfx, sizeof opfx, "fmon[%d].minvent[%d]", i, mc);
+              pb_obj(pb, opfx, mo, FALSE);
+          }
+        }
+    }
+
+    /* Floor objects in fobj chain order (gameplay-relevant iteration order) */
+    objcount = 0;
+    for (otmp = fobj; otmp; otmp = otmp->nobj) ++objcount;
+    pb_num(pb, "fobj.count", (long) objcount);
+    i = 0;
+    for (otmp = fobj; otmp; otmp = otmp->nobj, ++i) {
+        char opfx[BUFSZ];
+        Snprintf(opfx, sizeof opfx, "fobj[%d]", i);
+        pb_obj(pb, opfx, otmp, TRUE);
+    }
+
+    /* Hero inventory (chain order) */
+    i = 0;
+    for (otmp = gi.invent; otmp; otmp = otmp->nobj) ++i;
+    pb_num(pb, "invent.count", (long) i);
+    i = 0;
+    for (otmp = gi.invent; otmp; otmp = otmp->nobj, ++i) {
+        char opfx[BUFSZ];
+        Snprintf(opfx, sizeof opfx, "invent[%d]", i);
+        pb_obj(pb, opfx, otmp, FALSE);
+    }
+
+    /* Traps in ftrap chain order */
+    { struct trap *ttmp; int tc = 0;
+      for (ttmp = gf.ftrap; ttmp; ttmp = ttmp->ntrap) ++tc;
+      pb_num(pb, "traps.count", (long) tc);
+      tc = 0;
+      for (ttmp = gf.ftrap; ttmp; ttmp = ttmp->ntrap, ++tc) {
+          Sprintf(key, "traps[%d].x", tc); pb_num(pb, key, (long) ttmp->tx);
+          Sprintf(key, "traps[%d].y", tc); pb_num(pb, key, (long) ttmp->ty);
+          Sprintf(key, "traps[%d].ttyp", tc); pb_num(pb, key, (long) ttmp->ttyp);
+      }
+    }
+
+    /* Stairs */
+    { stairway *stway; int sc = 0;
+      for (stway = gs.stairs; stway; stway = stway->next) ++sc;
+      pb_num(pb, "stairs.count", (long) sc);
+      sc = 0;
+      for (stway = gs.stairs; stway; stway = stway->next, ++sc) {
+          Sprintf(key, "stairs[%d].x", sc); pb_num(pb, key, (long) stway->sx);
+          Sprintf(key, "stairs[%d].y", sc); pb_num(pb, key, (long) stway->sy);
+          Sprintf(key, "stairs[%d].up", sc); pb_num(pb, key, stway->up ? 1L : 0L);
+          Sprintf(key, "stairs[%d].isladder", sc); pb_num(pb, key, stway->isladder ? 1L : 0L);
+          Sprintf(key, "stairs[%d].to_dnum", sc); pb_num(pb, key, (long) stway->tolev.dnum);
+          Sprintf(key, "stairs[%d].to_dlevel", sc); pb_num(pb, key, (long) stway->tolev.dlevel);
+      }
+    }
+
+    /* Worms (v6): each long worm in fmon order, with its tail segments
+       listed tail first (the last is the head segment, which sits on the
+       worm itself).  The segment tables are file-static in worm.c. */
+    { int wc = 0, k = 0;
+      for (mtmp = fmon; mtmp; mtmp = mtmp->nmon)
+          if (mtmp->wormno) ++wc;
+      pb_num(pb, "worms.count", (long) wc);
+      for (mtmp = fmon; mtmp; mtmp = mtmp->nmon) {
+          int n, j;
+          coordxy *xs, *ys;
+          char seg[32];
+
+          if (!mtmp->wormno)
+              continue;
+          n = harness_worm_segs(mtmp->wormno, (coordxy *) 0, (coordxy *) 0, 0);
+          xs = (coordxy *) alloc((unsigned) (n + 1) * sizeof (coordxy));
+          ys = (coordxy *) alloc((unsigned) (n + 1) * sizeof (coordxy));
+          (void) harness_worm_segs(mtmp->wormno, xs, ys, n);
+          Sprintf(key, "worms[%d].mid", k); pb_num(pb, key, (long) mtmp->m_id);
+          Sprintf(key, "worms[%d].wormno", k); pb_num(pb, key, (long) mtmp->wormno);
+          Sprintf(key, "worms[%d].wgrowtime", k);
+          pb_num(pb, key, harness_wgrowtime(mtmp->wormno));
+          Sprintf(key, "worms[%d].nseg", k); pb_num(pb, key, (long) n);
+          Sprintf(key, "worms[%d].segs=", k);
+          pbuf_append(pb, key);
+          for (j = 0; j < n; j++) {
+              Sprintf(seg, "%s%d,%d", j ? ";" : "", (int) xs[j], (int) ys[j]);
+              pbuf_append(pb, seg);
+          }
+          pbuf_append(pb, "\n");
+          free((genericptr_t) xs);
+          free((genericptr_t) ys);
+          ++k;
+      }
+    }
+
+    /* Engravings: head_engr chain. */
+    { struct engr *ep; int ec = 0;
+      for (ep = head_engr; ep; ep = ep->nxt_engr) ++ec;
+      pb_num(pb, "engravings.count", (long) ec);
+      ec = 0;
+      for (ep = head_engr; ep; ep = ep->nxt_engr, ++ec) {
+          Sprintf(key, "engravings[%d].x", ec); pb_num(pb, key, (long) ep->engr_x);
+          Sprintf(key, "engravings[%d].y", ec); pb_num(pb, key, (long) ep->engr_y);
+          Sprintf(key, "engravings[%d].engr_type", ec); pb_num(pb, key, (long) ep->engr_type);
+          Sprintf(key, "engravings[%d].engr_time", ec); pb_num(pb, key, (long) ep->engr_time);
+          Sprintf(key, "engravings[%d].engr_txt", ec); pb_str(pb, key, ep->engr_txt[actual_text]);
+      }
+    }
+
+    /* Regions (gas clouds etc.): gr.regions[0..svn.n_regions-1].
+       Note: svn.n_regions, not gr.n_regions — the count lives in the
+       saved instance_globals_n on the 5.0 source tree.
+       attr_class field omitted: NhRegion in 5.0 does not carry an
+       attr_class member (see include/region.h).  Glyph + ttl + bbox
+       are sufficient for mfndpos / haze-region parity. */
+    { int rc;
+      pb_num(pb, "regions.count", (long) svn.n_regions);
+      for (rc = 0; rc < svn.n_regions; rc++) {
+          NhRegion *r = gr.regions[rc];
+          Sprintf(key, "regions[%d].lx", rc); pb_num(pb, key, r ? (long) r->bounding_box.lx : 0L);
+          Sprintf(key, "regions[%d].ly", rc); pb_num(pb, key, r ? (long) r->bounding_box.ly : 0L);
+          Sprintf(key, "regions[%d].hx", rc); pb_num(pb, key, r ? (long) r->bounding_box.hx : 0L);
+          Sprintf(key, "regions[%d].hy", rc); pb_num(pb, key, r ? (long) r->bounding_box.hy : 0L);
+          Sprintf(key, "regions[%d].glyph", rc); pb_num(pb, key, r ? (long) r->glyph : 0L);
+          Sprintf(key, "regions[%d].ttl", rc); pb_num(pb, key, r ? (long) r->ttl : 0L);
+      }
+    }
+
+    /* Exclusion zones: sve.exclusion_zones chain. */
+    { struct exclusion_zone *ez; int zc = 0;
+      for (ez = sve.exclusion_zones; ez; ez = ez->next) ++zc;
+      pb_num(pb, "exclusion_zones.count", (long) zc);
+      zc = 0;
+      for (ez = sve.exclusion_zones; ez; ez = ez->next, ++zc) {
+          Sprintf(key, "exclusion_zones[%d].zonetype", zc); pb_num(pb, key, (long) ez->zonetype);
+          Sprintf(key, "exclusion_zones[%d].lx", zc); pb_num(pb, key, (long) ez->lx);
+          Sprintf(key, "exclusion_zones[%d].ly", zc); pb_num(pb, key, (long) ez->ly);
+          Sprintf(key, "exclusion_zones[%d].hx", zc); pb_num(pb, key, (long) ez->hx);
+          Sprintf(key, "exclusion_zones[%d].hy", zc); pb_num(pb, key, (long) ez->hy);
+      }
+    }
+
+    /* Rooms, subrooms, doors and the up/down destination areas (v6),
+       carried over from the retired checkpoint JSON. */
+    { int ri;
+      char rpfx[BUFSZ];
+      pb_num(pb, "rooms.count", (long) svn.nroom);
+      for (ri = 0; ri < svn.nroom; ri++) {
+          Snprintf(rpfx, sizeof rpfx, "rooms[%d]", ri);
+          pb_room(pb, rpfx, &svr.rooms[ri]);
+      }
+      pb_num(pb, "subrooms.count", (long) gn.nsubroom);
+      for (ri = 0; ri < gn.nsubroom; ri++) {
+          Snprintf(rpfx, sizeof rpfx, "subrooms[%d]", ri);
+          pb_room(pb, rpfx, &gs.subrooms[ri]);
+      }
+      pb_num(pb, "doors.count", (long) gd.doorindex);
+      for (ri = 0; ri < gd.doorindex; ri++) {
+          Sprintf(key, "doors[%d].x", ri); pb_num(pb, key, (long) svd.doors[ri].x);
+          Sprintf(key, "doors[%d].y", ri); pb_num(pb, key, (long) svd.doors[ri].y);
+      }
+      pb_dest(pb, "updest", &svu.updest);
+      pb_dest(pb, "dndest", &svd.dndest);
+    }
+
+    /* Level grid — gameplay-relevant fields in x-major order */
+    pb_csv_grid(pb, "levl.typ", grid_typ);
+    pb_csv_grid(pb, "levl.flags", grid_flags);
+    pb_csv_grid(pb, "levl.horizontal", grid_horizontal);
+    pb_csv_grid(pb, "levl.lit", grid_lit);
+    pb_csv_grid(pb, "levl.roomno", grid_roomno);
+    pb_csv_grid(pb, "levl.edge", grid_edge);
+    /* levl.flags above is also wall_info and doormask (rm.h #defines
+       both as flags), so it covers the checkpoint's wallInfoGrid.
+       Not recorded: levl.glyph, seenv, waslit and the viz array, the
+       hero's display memory and vision.  JS does not yet maintain them
+       bit-exactly, and the screen channel compares what they produce. */
+}
+
+void
+harness_emit_mapstate_turn(const char *phase)
+{
+    struct pbuf pb;
+    unsigned long long h;
+    boolean do_hash, do_dump;
+    long turn = (long) svm.moves;
+
+    do_hash = mapstate_enabled();
+    do_dump = mapdump_turn_in_range(turn);
+    /* NETHACK_MAPSTATE=dump: dump every turn */
+    if (!do_dump && do_hash && mapstate_dump_all())
+        do_dump = TRUE;
+
+    if (!do_hash && !do_dump)
+        return;
+
+    pbuf_init(&pb);
+    build_mapdump(&pb, phase);
+
+    if (do_hash) {
+        h = fnv1a64_update(14695981039346656037ULL, pb.data);
+        /* phase= and lev= make the event a readable landmark in the log;
+           they are also in the payload, so the hash covers them. */
+        event_log("mapstate[v=%d phase=%s lev=d%dl%d turn=%ld hash=%016llx len=%d dump=%d]",
+                   MAPSTATE_SCHEMA_VERSION, phase && *phase ? phase : "turn",
+                   (int) u.uz.dnum, (int) u.uz.dlevel, turn, h, pb.len,
+                   do_dump ? 1 : 0);
+    }
+
+    if (do_dump) {
+        /* Emit each payload line as a ^md. event in the rng log.
+           This flows through the tmux session capture pipeline. */
+        const char *p = pb.data;
+        while (*p) {
+            const char *nl = strchr(p, '\n');
+            if (!nl) break;
+            {
+                int linelen = (int)(nl - p);
+                char *linebuf = (char *) alloc((unsigned)(linelen + 1));
+                memcpy(linebuf, p, (size_t) linelen);
+                linebuf[linelen] = '\0';
+                event_log("md.%s", linebuf);
+                free((genericptr_t) linebuf);
+            }
+            p = nl + 1;
+        }
+    }
+
+    pbuf_free(&pb);
+}
+
 /* for rejecting attempts to use wizard mode commands
  * Also used in wizcmds.c  */
 const char unavailcmd[] = "Unavailable command '%s'.";

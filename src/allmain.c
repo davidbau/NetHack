@@ -398,6 +398,8 @@ moveloop_core(void)
                             deferred_goto();
                     }
                 }
+
+                harness_emit_mapstate_turn("turn_end");
             }
         } while (u.umovement < NORMAL_SPEED); /* hero can't move */
 

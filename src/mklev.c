@@ -1600,6 +1600,7 @@ mklev(void)
     makelevel();
 
     level_finalize_topology();
+    harness_emit_mapstate_turn("mklev"); /* mapstate v6 checkpoint */
 
     reseed_random(rn2);
     reseed_random(rn2_on_display_rng);
