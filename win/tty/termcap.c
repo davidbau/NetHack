@@ -726,12 +726,42 @@ nomux_capture_write_screen(void)
     nomux_emit_marker("anim");
 }
 
+#ifdef TELEPORT_LLVM_COVERAGE
+/* Clang's profiling runtime does not write a useful profile when the session
+ * recorder eventually stops a still-running game after this explicit flush.
+ * Coverage workers create the file named by NETHACK_COVERAGE_FLUSH_REQUEST immediately
+ * before the last planned key.  The next authoritative input boundary writes
+ * the profile before acknowledging that boundary to the recorder, then removes
+ * the request.  This captures precisely the played prefix without injecting a
+ * quit command or writing a profile at every key. */
+extern int __llvm_profile_write_file(void);
+
+static void
+nomux_maybe_flush_coverage(void)
+{
+    const char *request = harness_getenv("NETHACK_COVERAGE_FLUSH_REQUEST");
+    FILE *fp;
+
+    if (!request)
+        return;
+    fp = fopen(request, "r");
+    if (!fp)
+        return;
+    (void) fclose(fp);
+    if (__llvm_profile_write_file() == 0)
+        (void) remove(request);
+}
+#endif
+
 /* Called at every real input-wait boundary (tty_nhgetch, tty_nh_poskey)
  * and once at nh_terminate after topten — the points where one
  * authoritative frame should be captured per step.  Bumps SEQ. */
 void
 nomux_capture_write_input_boundary(void)
 {
+#ifdef TELEPORT_LLVM_COVERAGE
+    nomux_maybe_flush_coverage();
+#endif
     nomux_seq++;
     nomux_emit_marker("input");
 }
