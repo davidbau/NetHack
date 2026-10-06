@@ -1000,11 +1000,18 @@ test_move(
     coordxy y = uy + dy;
     struct rm *tmpr;
     struct rm *ust;
+#define TEST_MOVE_RETURN(rv_expr)                                              \
+    do {                                                                       \
+        boolean tm_rv = (rv_expr);                                             \
+        dbg_log("test_move", "[mode=%d from=%d,%d dir=%d,%d to=%d,%d rv=%d]", \
+                mode, ux, uy, dx, dy, x, y, tm_rv ? TRUE : FALSE);            \
+        return tm_rv;                                                          \
+    } while (0)
 
     svc.context.door_opened = FALSE;
 
     if (!isok(x, y))
-        return FALSE;
+        TEST_MOVE_RETURN(FALSE);
 
     tmpr = &levl[x][y];
 
@@ -1023,31 +1030,31 @@ test_move(
                "there" being somewhere the player isn't sure of */
             if (mode == DO_MOVE)
                 There("is an obstacle there.");
-            return FALSE;
+            TEST_MOVE_RETURN(FALSE);
         } else if (tmpr->typ == IRONBARS) {
             if (mode == DO_MOVE
                 && (dmgtype(gy.youmonst.data, AD_RUST)
                     || dmgtype(gy.youmonst.data, AD_CORR)
                     || metallivorous(gy.youmonst.data))
                 && still_chewing(x, y)) {
-                return FALSE;
+                TEST_MOVE_RETURN(FALSE);
             }
             if (!(Passes_walls || passes_bars(gy.youmonst.data))) {
                 if (mode == DO_MOVE && flags.mention_walls)
                     You("cannot pass through the bars.");
-                return FALSE;
+                TEST_MOVE_RETURN(FALSE);
             }
         } else if (tunnels(gy.youmonst.data)
                    && !needspick(gy.youmonst.data)) {
             /* Eat the rock. */
             if (mode == DO_MOVE && still_chewing(x, y))
-                return FALSE;
+                TEST_MOVE_RETURN(FALSE);
         } else if (flags.autodig && !svc.context.run && !svc.context.nopick
                    && uwep && is_pick(uwep)) {
             /* MRKR: Automatic digging when wielding the appropriate tool */
             if (mode == DO_MOVE)
                 (void) use_pick_axe2(uwep);
-            return FALSE;
+            TEST_MOVE_RETURN(FALSE);
         } else {
             if (mode == DO_MOVE) {
                 if (is_db_wall(x, y)) {
@@ -1072,7 +1079,7 @@ test_move(
                     pline_dir(xytodir(dx, dy), "It's %s.", buf);
                 }
             }
-            return FALSE;
+            TEST_MOVE_RETURN(FALSE);
         }
     } else if (IS_DOOR(tmpr->typ)) {
         if (closed_door(x, y)) {
@@ -1086,12 +1093,12 @@ test_move(
             } else if (Underwater) {
                 if (mode == DO_MOVE)
                     pline("There is an obstacle there.");
-                return FALSE;
+                TEST_MOVE_RETURN(FALSE);
             } else if (tunnels(gy.youmonst.data)
                        && !needspick(gy.youmonst.data)) {
                 /* Eat the door. */
                 if (mode == DO_MOVE && still_chewing(x, y))
-                    return FALSE;
+                    TEST_MOVE_RETURN(FALSE);
             } else {
                 if (mode == DO_MOVE) {
                     if (amorphous(gy.youmonst.data))
@@ -1138,7 +1145,7 @@ test_move(
                     }
                 } else if (mode == TEST_TRAV || mode == TEST_TRAP)
                     goto testdiag;
-                return FALSE;
+                TEST_MOVE_RETURN(FALSE);
             }
         } else {
  testdiag:
@@ -1151,7 +1158,7 @@ test_move(
                     if (Underwater || flags.mention_walls)
                         You_cant("move diagonally into an intact doorway.");
                 }
-                return FALSE;
+                TEST_MOVE_RETURN(FALSE);
             }
         }
     }
@@ -1162,15 +1169,15 @@ test_move(
         case 3:
             if (mode == DO_MOVE)
                 You("cannot pass that way.");
-            return FALSE;
+            TEST_MOVE_RETURN(FALSE);
         case 2:
             if (mode == DO_MOVE)
                 You("are carrying too much to get through.");
-            return FALSE;
+            TEST_MOVE_RETURN(FALSE);
         case 1:
             if (mode == DO_MOVE)
                 Your("body is too large to fit through.");
-            return FALSE;
+            TEST_MOVE_RETURN(FALSE);
         default:
             break; /* can squeeze through */
         }
@@ -1178,7 +1185,7 @@ test_move(
         /* consecutive long worm segments are at <ux,y> and <x,uy> */
         if (mode == DO_MOVE)
             pline("%s is in your way.", YMonnam(m_at(ux, y)));
-        return FALSE;
+        TEST_MOVE_RETURN(FALSE);
     }
     /* Pick travel path that does not require crossing a trap.
      * Avoid water and lava using the usual running rules.
@@ -1187,7 +1194,7 @@ test_move(
         struct trap *t = t_at(x, y);
 
         if (t && t->tseen && t->ttyp != VIBRATING_SQUARE)
-            return (mode == TEST_TRAP);
+            TEST_MOVE_RETURN(mode == TEST_TRAP);
 
         /* FIXME: should be using lastseentyp[x][y] rather than seen vector
          */
@@ -1201,11 +1208,11 @@ test_move(
                 || !(Levitation || Flying
                      || (is_pool(x, y) ? Known_wwalking
                          : (Known_lwalking && is_lava(u.ux, u.uy))))))
-            return (mode == TEST_TRAP);
+            TEST_MOVE_RETURN(mode == TEST_TRAP);
     }
 
     if (mode == TEST_TRAP)
-        return FALSE; /* do not move through traps */
+        TEST_MOVE_RETURN(FALSE); /* do not move through traps */
 
     ust = &levl[ux][uy];
 
@@ -1215,7 +1222,7 @@ test_move(
         /* Can't move at a diagonal out of a doorway with door. */
         if (mode == DO_MOVE && flags.mention_walls)
             You_cant("move diagonally out of an intact doorway.");
-        return FALSE;
+        TEST_MOVE_RETURN(FALSE);
     }
 
     if (sobj_at(BOULDER, x, y) && (Sokoban || !Passes_walls)) {
@@ -1223,22 +1230,22 @@ test_move(
             && !(Blind || Hallucination) && !could_move_onto_boulder(x, y)) {
             if (mode == DO_MOVE && flags.mention_walls)
                 pline_dir(xytodir(dx,dy), "A boulder blocks your path.");
-            return FALSE;
+            TEST_MOVE_RETURN(FALSE);
         }
         if (mode == DO_MOVE) {
             /* tunneling monsters will chew before pushing */
             if (tunnels(gy.youmonst.data) && !needspick(gy.youmonst.data)
                 && !Sokoban) {
                 if (still_chewing(x, y))
-                    return FALSE;
+                    TEST_MOVE_RETURN(FALSE);
             } else if (moverock() < 0)
-                return FALSE;
+                TEST_MOVE_RETURN(FALSE);
         } else if (mode == TEST_TRAV) {
             struct obj *obj;
 
             /* never travel through boulders in Sokoban */
             if (Sokoban)
-                return FALSE;
+                TEST_MOVE_RETURN(FALSE);
 
             /* don't pick two boulders in a row, unless there's a way thru */
             if (sobj_at(BOULDER, ux, uy) && !Sokoban) {
@@ -1249,14 +1256,15 @@ test_move(
                     && !carrying(PICK_AXE) && !carrying(DWARVISH_MATTOCK)
                     && !((obj = carrying(WAN_DIGGING))
                          && !objects[obj->otyp].oc_name_known))
-                    return FALSE;
+                    TEST_MOVE_RETURN(FALSE);
             }
         }
         /* assume you'll be able to push it when you get there... */
     }
 
     /* OK, it is a legal place to move. */
-    return TRUE;
+    TEST_MOVE_RETURN(TRUE);
+#undef TEST_MOVE_RETURN
 }
 
 /*

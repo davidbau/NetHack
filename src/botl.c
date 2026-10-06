@@ -253,6 +253,12 @@ do_statusline2(void)
 void
 bot(void)
 {
+    repaint_log("bot hp=%d botl=%d botlx=%d time=%d",
+                (int) u.uhp, (int) disp.botl, (int) disp.botlx,
+                (int) disp.time_botl);
+    repaint_debug_log("owner=botl.bot hp=%d botl=%d botlx=%d time=%d",
+                      (int) u.uhp, (int) disp.botl, (int) disp.botlx,
+                      (int) disp.time_botl);
     if (gb.bot_disabled)
         return;
     /* dosave() flags completion by setting u.uhp to -1; suppress_map_output()

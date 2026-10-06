@@ -271,8 +271,11 @@ vpline(const char *line, va_list the_args)
         vision_recalc(0);
         in_pline = tmp_in_pline;
     }
-    if (u.ux)
+    if (u.ux) {
+        repaint_debug_set_scope("pline.vpline");
         flush_screen((gp.pline_flags & NO_CURS_ON_U) ? 0 : 1); /* %% */
+        repaint_debug_clear_scope();
+    }
 
     putmesg(line);
 

@@ -2836,6 +2836,33 @@ extern void midlog_exit_ptr(const char *, const void *, const char *, int,
                             const char *);
 /* Event logging for differential-debug instrumentation */
 extern const char *event_mon_ref(const struct monst *, int, coordxy, coordxy);
+extern void repaint_log(const char *, ...) PRINTF_F(1, 2);
+extern void repaint_debug_log(const char *, ...) PRINTF_F(1, 2);
+extern void repaint_debug_set_scope(const char *);
+extern void repaint_debug_clear_scope(void);
+extern const char *repaint_debug_get_scope(void);
+extern long repaint_debug_get_step_index(void);
+extern const char *repaint_debug_get_step_path(void);
+extern int repaint_debug_get_step_key(void);
+extern boolean cosmic_display_log_enabled(void);
+extern void cosmic_display_push_owner(const char *);
+extern void cosmic_display_pop_owner(const char *);
+extern void cosmic_display_set_cell(coordxy, coordxy);
+extern void cosmic_display_clear_cell(void);
+extern void cosmic_display_set_newsym_branch(const char *);
+extern void cosmic_display_clear_newsym_branch(void);
+extern void cosmic_display_set_maploc_branch(const char *);
+extern void cosmic_display_clear_maploc_branch(void);
+extern void cosmic_display_prepare_rng_kind(const char *);
+extern void cosmic_display_log_newsym(coordxy, coordxy, const char *, int);
+extern void cosmic_display_log_maploc(coordxy, coordxy, const char *, int);
+extern void cosmic_display_log_tty_menu_show(int, const char *, int, int,
+                                             long, long, int, int, int);
+extern void cosmic_display_log_tty_menu_draw(int, const char *, int, int,
+                                             long, int, int, const char *);
+extern void cosmic_display_log_tty_menu_hide(int, const char *, int, int);
+extern void cosmic_display_log_tty_menu_erase(int, const char *, int, int,
+                                              int, int, int, int);
 extern void event_log(const char *, ...) PRINTF_F(1, 2);
 
 /* ### role.c ### */

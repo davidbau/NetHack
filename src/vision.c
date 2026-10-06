@@ -529,9 +529,21 @@ vision_recalc(int control)
     const seenV *sv;   /* ptr to seen angle bits */
     int oldseenv;      /* previous seenv value */
 
+    /* Attribute this pass's per-cell display decisions to vision_recalc.  The
+       JS port already tags them (js/vision.js), and vision_recalc was one of
+       only two places the two engines' owner labels disagreed, which is what
+       forces sweep-display-decisions to drop the owner field and compare
+       per-step SETS instead of pairing the two streams positionally.  The tag
+       is also how an EXTRA vision_recalc gets named rather than guessed at:
+       #1665 was one per turn, and reading `owner=vision_recalc` on the extra
+       newsym is what turned that from a search into a lookup. */
+    cosmic_display_push_owner("vision_recalc");
+
     gv.vision_full_recalc = 0; /* reset flag */
-    if (gi.in_mklev || program_state.in_getlev || !iflags.vision_inited)
+    if (gi.in_mklev || program_state.in_getlev || !iflags.vision_inited) {
+        cosmic_display_pop_owner("vision_recalc");
         return;
+    }
 
     /*
      * Either the light sources have been taken care of, or we must
@@ -854,6 +866,7 @@ vision_recalc(int control)
     gv.viz_rmax = next_rmax;
 
     notice_all_mons(TRUE);
+    cosmic_display_pop_owner("vision_recalc");
 }
 
 /*

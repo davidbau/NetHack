@@ -174,6 +174,39 @@ static int mvl_abort_lev;
 static int mvl_wtcap = 0;
 static int mvl_change = 0;
 
+static long harness_repaint_step_index = -1L;
+static const char *harness_repaint_step_path = (const char *) 0;
+static int harness_repaint_step_keyarg = -1;
+
+staticfn void
+repaint_debug_note_runstep(const char *pathstr, int keyarg)
+{
+    if (!pathstr || !*pathstr)
+        pathstr = "unknown";
+    if (!strcmp(pathstr, "fresh_cmd"))
+        ++harness_repaint_step_index;
+    harness_repaint_step_path = pathstr;
+    harness_repaint_step_keyarg = keyarg;
+}
+
+long
+repaint_debug_get_step_index(void)
+{
+    return harness_repaint_step_index;
+}
+
+const char *
+repaint_debug_get_step_path(void)
+{
+    return harness_repaint_step_path;
+}
+
+int
+repaint_debug_get_step_key(void)
+{
+    return harness_repaint_step_keyarg;
+}
+
 void
 moveloop_core(void)
 {
@@ -528,6 +561,13 @@ moveloop_core(void)
     u.umoved = FALSE;
 
     if (gm.multi > 0) {
+#define RUNSTEP_EVENT(pathstr, keyarg)                                         \
+    do {                                                                       \
+        repaint_debug_note_runstep((pathstr), (keyarg));                       \
+        dbg_log("runstep", "[path=%s keyarg=%d cmd=%d cc=%d moves=%ld multi=%d run=%d mv=%d move=%d occ=%d umoved=%d ux=%d uy=%d]", \
+                (pathstr), (int) (keyarg), gc.cmd_key, gc.command_count, \
+                svm.moves, gm.multi, svc.context.run, svc.context.mv, svc.context.move, go.occupation ? 1 : 0, u.umoved ? 1 : 0, u.ux, u.uy); \
+    } while (0)
         lookaround();
         runmode_delay_output();
         if (!gm.multi) {
@@ -536,6 +576,7 @@ moveloop_core(void)
             event_log("ctx_move[%s=%d umv=%d]", __func__, (int)svc.context.move, u.umovement);
             return;
         }
+        RUNSTEP_EVENT(svc.context.mv ? "repeat_mv" : "repeat_cmd", gc.cmd_key);
         if (svc.context.mv) {
             if (gm.multi < COLNO && !--gm.multi)
                 end_running(TRUE);
@@ -543,12 +584,14 @@ moveloop_core(void)
         } else {
             --gm.multi;
             nhassert(gc.command_count != 0);
+            RUNSTEP_EVENT("repeat_cmd_done", gc.cmd_key);
             rhack(gc.cmd_key);
         }
     } else if (gm.multi == 0) {
 #ifdef MAIL
         ckmailstatus();
 #endif
+        RUNSTEP_EVENT("fresh_cmd", 0);
         rhack(0);
     }
     if (u.utotype)       /* change dungeon level */
@@ -577,6 +620,7 @@ moveloop_core(void)
         nhl_pcall_handle(gl.luacore, 1, 0, "moveloop_core", NHLpa_panic);
         lua_settop(gl.luacore, 0);
     }
+#undef RUNSTEP_EVENT
 }
 
 staticfn void

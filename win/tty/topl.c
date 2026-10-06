@@ -224,6 +224,12 @@ more(void)
     }
 
     ttyDisplay->inmore++;
+    repaint_log("more hp=%d topl=%d row=%d col=%d",
+                (int) u.uhp, (int) ttyDisplay->toplin,
+                cw ? cw->cury : -1, cw ? cw->curx : -1);
+    repaint_debug_log("owner=tty.topl.more hp=%d topl=%d row=%d col=%d",
+                      (int) u.uhp, (int) ttyDisplay->toplin,
+                      cw ? cw->cury : -1, cw ? cw->curx : -1);
 
     if (ttyDisplay->toplin) {
         tty_curs(BASE_WINDOW, cw->curx + 1, cw->cury);
@@ -237,7 +243,15 @@ more(void)
     if (flags.standout)
         standoutend();
 
+    repaint_debug_log("owner=tty.topl.more.await hp=%d topl=%d row=%d col=%d prompt=%s",
+                      (int) u.uhp, (int) ttyDisplay->toplin,
+                      cw ? cw->cury : -1, cw ? cw->curx : -1, "\033 ");
     xwaitforspace("\033 ");
+    repaint_debug_log("owner=tty.topl.more.key hp=%d topl=%d row=%d col=%d morc=%d dismiss=%d",
+                      (int) u.uhp, (int) ttyDisplay->toplin,
+                      cw ? cw->cury : -1, cw ? cw->curx : -1,
+                      (int) (unsigned char) morc,
+                      (morc == '\033' || morc == ' ') ? 1 : 0);
 
     if (morc == '\033') {
         if (!(cw->flags & WIN_NOSTOP))
@@ -253,6 +267,10 @@ more(void)
         home();
         cl_end();
     }
+    repaint_debug_log("owner=tty.topl.more.return hp=%d topl=%d row=%d col=%d morc=%d",
+                      (int) u.uhp, (int) ttyDisplay->toplin,
+                      cw ? cw->cury : -1, cw ? cw->curx : -1,
+                      (int) (unsigned char) morc);
     ttyDisplay->toplin = TOPLINE_EMPTY;
     event_log("toplin[%s=%d]", __func__, (int)ttyDisplay->toplin);
     ttyDisplay->inmore = 0;
@@ -278,6 +296,9 @@ update_topl(const char *bp)
         /* room for --More-- */
         && n0 + (int) strlen(gt.toplines) + 3 < min(CO - 8, TBUFSZ)
         && (notdied = strncmp(bp, "You die", 7)) != 0) {
+        repaint_debug_log("owner=tty.topl.update_topl.concat_fit topl=%d cury=%d len=%d existing=%d msg=%s",
+                          (int) ttyDisplay->toplin, cw ? cw->cury : -1,
+                          n0, (int) strlen(gt.toplines), bp ? bp : "");
         Strcat(gt.toplines, "  ");
         Strcat(gt.toplines, bp);
         cw->curx += 2;
@@ -286,6 +307,9 @@ update_topl(const char *bp)
         return;
     } else if (!skip) {
         if (ttyDisplay->toplin == TOPLINE_NEED_MORE) {
+            repaint_debug_log("owner=tty.topl.update_topl.pre_more topl=%d cury=%d len=%d existing=%d msg=%s",
+                              (int) ttyDisplay->toplin, cw ? cw->cury : -1,
+                              n0, (int) strlen(gt.toplines), bp ? bp : "");
             more();
         } else if (cw->cury) { /* for toplin==TOPLINE_NON_EMPTY && cury > 1 */
             docorner(1, cw->cury + 1, 0); /* reset cury = 0 if redraw screen */
@@ -312,8 +336,12 @@ update_topl(const char *bp)
     }
     if (!notdied) /* double negative => "You die"; avoid suppressing mesg */
         cw->flags &= ~WIN_STOP, skip = FALSE;
-    if (!skip)
+    if (!skip) {
+        repaint_debug_log("owner=tty.topl.update_topl.redotoplin topl=%d cury=%d len=%d msg=%s",
+                          (int) ttyDisplay->toplin, cw ? cw->cury : -1,
+                          (int) strlen(gt.toplines), gt.toplines);
         redotoplin(gt.toplines);
+    }
 }
 
 static void
@@ -415,6 +443,12 @@ tty_yn_function(
     char prompt[BUFSZ];
 
     yn_number = 0L;
+    repaint_log("yn hp=%d topl=%d def=%d query=%s",
+                (int) u.uhp, (int) ttyDisplay->toplin, (int) def,
+                query ? query : "");
+    repaint_debug_log("owner=tty.topl.yn_function hp=%d topl=%d def=%d query=%s",
+                      (int) u.uhp, (int) ttyDisplay->toplin, (int) def,
+                      query ? query : "");
     if (ttyDisplay->toplin == TOPLINE_NEED_MORE
         && (cw->flags & (WIN_STOP | WIN_NOSTOP)) != WIN_STOP)
         more();

@@ -80,6 +80,13 @@ missmm(
 {
     pre_mm_attack(magr, mdef);
 
+    /* Combat trace: monster-vs-monster miss (invisible to hero by default,
+       so emit a structural event to surface it for parity comparison). */
+    dbg_log("mcombat", "[miss agr=%d#%d def=%d#%d aatyp=%d adtyp=%d]",
+            monsndx(magr->data), magr->m_id,
+            monsndx(mdef->data), mdef->m_id,
+            (int) mattk->aatyp, (int) mattk->adtyp);
+
     if (gv.vis) {
         pline("%s %s %s.", Monnam(magr),
               (magr->mcan || !could_seduce(magr, mdef, mattk)) ? "misses"
@@ -1071,6 +1078,12 @@ mdamagem(
         return mhm.hitflags;
 
     mdef->mhp -= mhm.damage;
+    /* Combat trace: monster-vs-monster damage applied via mdamagem. */
+    dbg_log("mcombat", "[dmm agr=%d#%d def=%d#%d aatyp=%d adtyp=%d dmg=%d nhp=%d]",
+            monsndx(magr->data), magr->m_id,
+            monsndx(mdef->data), mdef->m_id,
+            (int) mattk->aatyp, (int) mattk->adtyp,
+            (int) mhm.damage, (int) mdef->mhp);
     if (mdef->mhp < 1) {
         if (m_at(mdef->mx, mdef->my) == magr) { /* see gulpmm() */
             remove_monster(mdef->mx, mdef->my);
@@ -1164,6 +1177,13 @@ mon_poly(struct monst *magr, struct monst *mdef, int dmg)
 
             dmg += (mdef->mhpmax + 1) / 2;
             mdef->mhp -= dmg;
+            /* Combat trace: AD_DISN system-shock half-HP damage.
+               mon_poly() doesn't carry the original mattk, so the
+               event omits aatyp/adtyp (always AD_DISN-flavored). */
+            dbg_log("mcombat", "[disn agr=%d#%d def=%d#%d dmg=%d nhp=%d]",
+                    monsndx(magr->data), magr->m_id,
+                    monsndx(mdef->data), mdef->m_id,
+                    (int) dmg, (int) mdef->mhp);
             dmg = 0;
             if (DEADMONSTER(mdef)) {
                 if (magr == &gy.youmonst)
@@ -1449,7 +1469,14 @@ passivemm(
         tmp = 0;
 
  assess_dmg:
-    if ((magr->mhp -= tmp) <= 0) {
+    magr->mhp -= tmp;
+    /* Combat trace: passivemm damage applied to aggressor. */
+    dbg_log("mcombat", "[psv agr=%d#%d def=%d#%d aatyp=%d adtyp=%d dmg=%d nhp=%d]",
+            monsndx(magr->data), magr->m_id,
+            monsndx(mdef->data), mdef->m_id,
+            (int) mddat->mattk[i].aatyp, (int) mddat->mattk[i].adtyp,
+            (int) tmp, (int) magr->mhp);
+    if (magr->mhp <= 0) {
         monkilled(magr, "", (int) mddat->mattk[i].adtyp);
         return (mdead | mhit | M_ATTK_AGR_DIED);
     }

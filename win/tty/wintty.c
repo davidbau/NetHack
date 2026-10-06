@@ -1058,19 +1058,37 @@ erase_menu_or_text(
     struct WinDesc *cw,
     boolean clear)
 {
+    const char *wtype = (cw->type == NHW_TEXT) ? "NHW_TEXT"
+                        : (cw->type == NHW_MENU) ? "NHW_MENU"
+                                                 : "NHW_OTHER";
     event_log("erase_menu_or_text[win=%d offx=%d maxrow=%d]",
               (int) window, (int) cw->offx, (int) cw->maxrow);
     if (cw->offx == 0) {
         if (cw->offy) {
+            cosmic_display_log_tty_menu_erase(window, wtype, 0, 0,
+                                              ttyDisplay->cols - 1,
+                                              ttyDisplay->rows - 1,
+                                              clear ? 1 : 0, 0);
             tty_curs(window, 1, 0);
             cl_eos();
         } else if (clear) {
+            cosmic_display_log_tty_menu_erase(window, wtype, 0, 0,
+                                              ttyDisplay->cols - 1,
+                                              ttyDisplay->rows - 1,
+                                              1, 0);
             term_clear_screen();
         } else {
+            cosmic_display_log_tty_menu_erase(window, wtype, 0, 0,
+                                              ttyDisplay->cols - 1,
+                                              ttyDisplay->rows - 1,
+                                              0, 1);
             docrt();
             flush_screen(1);
         }
     } else {
+        cosmic_display_log_tty_menu_erase(window, wtype, cw->offx, 0,
+                                          ttyDisplay->cols - 1,
+                                          cw->maxrow + 1, clear ? 1 : 0, 1);
         docorner((int) cw->offx, cw->maxrow + 1, 0);
     }
 }
@@ -1137,6 +1155,9 @@ tty_clear_nhwindow(winid window)
 
     switch (cw->type) {
     case NHW_MESSAGE:
+        repaint_debug_log("owner=tty.wintty.clear_message.enter topl=%d row=%d col=%d",
+                          ttyDisplay ? ttyDisplay->toplin : -1,
+                          cw ? cw->cury : -1, cw ? cw->curx : -1);
         if (ttyDisplay->toplin != TOPLINE_EMPTY) {
             if (!erasing_tty_screen) {
         event_log("tty_clear_msg[cury=%d toplin=%d]",
@@ -1151,6 +1172,9 @@ tty_clear_nhwindow(winid window)
             ttyDisplay->toplin = TOPLINE_EMPTY;
             event_log("toplin[%s=%d]", __func__, (int)ttyDisplay->toplin);
         }
+        repaint_debug_log("owner=tty.wintty.clear_message.exit topl=%d row=%d col=%d",
+                          ttyDisplay ? ttyDisplay->toplin : -1,
+                          cw ? cw->cury : -1, cw ? cw->curx : -1);
         break;
     case NHW_STATUS:
         m = cw->maxrow;
@@ -1653,6 +1677,10 @@ process_menu_window(winid window, struct WinDesc *cw)
             else
                 Strcpy(cw->morestr, defmorestr);
 
+            cosmic_display_log_tty_menu_draw(
+                window, "NHW_MENU", 0, page_lines, page_lines,
+                cw->npages, curr_page, cw->morestr);
+
             tty_curs(window, 1, page_lines);
             cl_end();
             dmore(cw, resp);
@@ -1991,6 +2019,7 @@ tty_display_nhwindow(
 {
     struct WinDesc *cw = 0;
     short s_maxcol;
+    int fullscreen_menu;
 
     HUPSKIP();
     if (window == WIN_ERR || (cw = wins[window]) == (struct WinDesc *) 0)
@@ -2004,8 +2033,17 @@ tty_display_nhwindow(
 
     switch (cw->type) {
     case NHW_MESSAGE:
+        repaint_debug_log("owner=tty.wintty.display_message.enter blocking=%d topl=%d row=%d col=%d",
+                          blocking ? 1 : 0, ttyDisplay ? ttyDisplay->toplin : -1,
+                          cw ? cw->cury : -1, cw ? cw->curx : -1);
         if (ttyDisplay->toplin == TOPLINE_NEED_MORE) {
+            repaint_debug_log("owner=tty.wintty.display_message.pre_more blocking=%d topl=%d row=%d col=%d",
+                              blocking ? 1 : 0, ttyDisplay ? ttyDisplay->toplin : -1,
+                              cw ? cw->cury : -1, cw ? cw->curx : -1);
             more();
+            repaint_debug_log("owner=tty.wintty.display_message.post_more blocking=%d topl=%d row=%d col=%d",
+                              blocking ? 1 : 0, ttyDisplay ? ttyDisplay->toplin : -1,
+                              cw ? cw->cury : -1, cw ? cw->curx : -1);
             ttyDisplay->toplin = TOPLINE_NEED_MORE; /* more resets this */
             tty_clear_nhwindow(window);
             nhassert(ttyDisplay->toplin == TOPLINE_EMPTY);
@@ -2016,6 +2054,9 @@ tty_display_nhwindow(
         cw->curx = cw->cury = 0;
         if (!cw->active)
             iflags.window_inited = TRUE;
+        repaint_debug_log("owner=tty.wintty.display_message.exit blocking=%d topl=%d row=%d col=%d",
+                          blocking ? 1 : 0, ttyDisplay ? ttyDisplay->toplin : -1,
+                          cw ? cw->cury : -1, cw ? cw->curx : -1);
         break;
     case NHW_MAP:
         end_glyphout();
@@ -2058,11 +2099,13 @@ tty_display_nhwindow(
         if (ttyDisplay->toplin == TOPLINE_NEED_MORE)
             tty_display_nhwindow(WIN_MESSAGE, TRUE);
 #ifdef H2344_BROKEN
-        if (cw->maxrow >= (int) ttyDisplay->rows
-            || !iflags.menu_overlay)
+        fullscreen_menu = (cw->maxrow >= (int) ttyDisplay->rows
+                           || !iflags.menu_overlay);
+        if (fullscreen_menu)
 #else
-        if (cw->offx == 10 || cw->maxrow >= (int) ttyDisplay->rows
-            || !iflags.menu_overlay)
+        fullscreen_menu = (cw->offx == 10 || cw->maxrow >= (int) ttyDisplay->rows
+                           || !iflags.menu_overlay);
+        if (fullscreen_menu)
 #endif
         {
             cw->offx = 0;
@@ -2077,6 +2120,11 @@ tty_display_nhwindow(
             if (WIN_MESSAGE != WIN_ERR)
                 tty_clear_nhwindow(WIN_MESSAGE);
         }
+
+        cosmic_display_log_tty_menu_show(
+            window, (cw->type == NHW_TEXT) ? "NHW_TEXT" : "NHW_MENU",
+            cw->offx, cw->offy, cw->maxrow, cw->maxcol,
+            iflags.menu_overlay ? 1 : 0, fullscreen_menu, blocking ? 1 : 0);
 
         if (cw->data || !cw->maxrow)
             process_text_window(window, cw);
@@ -2137,6 +2185,12 @@ tty_dismiss_nhwindow(winid window)
                 if (program_state.in_role_selection)
                     clearscreen = TRUE;
 
+                cosmic_display_log_tty_menu_hide(
+                    window,
+                    (cw->type == NHW_TEXT) ? "NHW_TEXT"
+                    : (cw->type == NHW_MENU) ? "NHW_MENU"
+                    : "NHW_PERMINVENT",
+                    1, clearscreen ? 1 : 0);
                 erase_menu_or_text(window, cw, clearscreen);
             }
             cw->active = 0;
@@ -3775,6 +3829,14 @@ void
 tty_mark_synch(void)
 {
     HUPSKIP();
+    repaint_log("mark hp=%d topl=%d inread=%d inmore=%d",
+                (int) u.uhp, ttyDisplay ? (int) ttyDisplay->toplin : -1,
+                ttyDisplay ? ttyDisplay->inread : -1,
+                ttyDisplay ? ttyDisplay->inmore : -1);
+    repaint_debug_log("owner=tty.wintty.mark_synch hp=%d topl=%d inread=%d inmore=%d",
+                      (int) u.uhp, ttyDisplay ? (int) ttyDisplay->toplin : -1,
+                      ttyDisplay ? ttyDisplay->inread : -1,
+                      ttyDisplay ? ttyDisplay->inmore : -1);
     (void) fflush(stdout);
 }
 
@@ -4323,8 +4385,12 @@ tty_nhgetch(void)
     }
     /* topline has been seen - we can clear the need for --More-- */
     if (ttyDisplay && ttyDisplay->toplin == TOPLINE_NEED_MORE) {
+        repaint_debug_log("owner=tty.wintty.nhgetch.toplin_need_more_to_non_empty key=%d topl=%d",
+                          i, ttyDisplay->toplin);
         ttyDisplay->toplin = TOPLINE_NON_EMPTY;
         event_log("toplin[%s=%d]", __func__, (int)ttyDisplay->toplin);
+        repaint_debug_log("owner=tty.wintty.nhgetch.toplin_now_non_empty key=%d topl=%d",
+                          i, ttyDisplay->toplin);
     }
 #ifdef TTY_TILES_ESCCODES
     {

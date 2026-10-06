@@ -421,9 +421,11 @@ make_hallucinated(
             swallowed(0); /* redraw swallow display */
         } else {
             /* The see_* routines should be called *before* the pline. */
+            cosmic_display_push_owner("make_hallucinated");
             see_monsters();
             see_objects();
             see_traps();
+            cosmic_display_pop_owner("make_hallucinated");
         }
 
         /* for perm_inv and anything similar

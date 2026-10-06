@@ -453,22 +453,27 @@ unmap_object(coordxy x, coordxy y)
         NhRegion *_ml_reg;                                              \
                                                                         \
         if ((obj = vobj_at(x, y)) && !covers_objects(x, y)) {           \
+            cosmic_display_log_maploc(x, y, "obj", show);              \
             map_object(obj, show);                                      \
         } else if ((trap = t_at(x, y))                                  \
                     && trap->tseen && !covers_traps(x, y)) {            \
+            cosmic_display_log_maploc(x, y, "trap", show);             \
             map_trap(trap, show);                                       \
         } else if (spot_shows_engravings(x, y)                          \
                  && (ml_ep = engr_at(x, y)) != 0                        \
                  && ml_ep->erevealed                                    \
                  && !covers_traps(x, y)) {                              \
+            cosmic_display_log_maploc(x, y, "engr", show);             \
             map_engraving(ml_ep, show);                                 \
         } else {                                                        \
+            cosmic_display_log_maploc(x, y, "terrain", show);          \
             map_background(x, y, show);                                 \
         }                                                               \
                                                                         \
         update_lastseentyp(x, y);                                       \
         if (show && !Blind && (_ml_reg = visible_region_at(x, y)) != 0) \
             show_region(_ml_reg, x, y);                                 \
+        cosmic_display_clear_maploc_branch();                           \
     } while (0)
 
 void
@@ -922,9 +927,17 @@ newsym(coordxy x, coordxy y)
     int see_it;
     boolean worm_tail;
 
+    cosmic_display_set_cell(x, y);
+    cosmic_display_clear_newsym_branch();
+    cosmic_display_clear_maploc_branch();
+
     /* don't try to produce map output when level is in a state of flux */
-    if (_suppress_map_output())
+    if (_suppress_map_output()) {
+        cosmic_display_clear_newsym_branch();
+        cosmic_display_clear_maploc_branch();
+        cosmic_display_clear_cell();
         return;
+    }
     /* should never happen; same error handling as u_on_newpos() */
     if (!isok(x, y)) {
         void (*errfunc)(const char *, ...) PRINTF_F_PTR(1, 2);
@@ -932,20 +945,32 @@ newsym(coordxy x, coordxy y)
         errfunc = (x < 0 || y < 0 || x > COLNO - 1 || y > ROWNO - 1) ? panic
                   : impossible; /* misuse of column 0 is less severe */
         (*errfunc)("newsym: attempting screen update for <%d,%d>", x, y);
+        cosmic_display_clear_newsym_branch();
+        cosmic_display_clear_maploc_branch();
+        cosmic_display_clear_cell();
         return;
     }
 
     /* only permit updating the hero when swallowed */
     if (u.uswallow) {
-        if (u_at(x, y))
+        if (u_at(x, y)) {
+            cosmic_display_log_newsym(x, y, "hero-swallowed", 1);
             display_self();
+        }
+        cosmic_display_clear_newsym_branch();
+        cosmic_display_clear_maploc_branch();
+        cosmic_display_clear_cell();
         return;
     }
     if (Underwater && !Is_waterlevel(&u.uz)) {
         /* when underwater, don't do anything unless <x,y> is an
            adjacent water or lava or ice position */
-        if (!(is_pool_or_lava(x, y) || is_ice(x, y)) || !next2u(x, y))
+        if (!(is_pool_or_lava(x, y) || is_ice(x, y)) || !next2u(x, y)) {
+            cosmic_display_clear_newsym_branch();
+            cosmic_display_clear_maploc_branch();
+            cosmic_display_clear_cell();
             return;
+        }
     }
     lev = &levl[x][y];
 
@@ -993,13 +1018,21 @@ newsym(coordxy x, coordxy y)
         if (reg && (ACCESSIBLE(lev->typ)
                     || (reg->visible && is_pool_or_lava(x, y)))) {
             if (!mon_overrides_region(mon, x, y)) {
+                cosmic_display_log_newsym(x, y, "visible-region", 1);
                 show_region(reg, x, y);
+                cosmic_display_clear_newsym_branch();
+                cosmic_display_clear_maploc_branch();
+                cosmic_display_clear_cell();
                 return;
             }
         }
 
         if (u_at(x, y)) {
             int see_self = canspotself();
+            cosmic_display_log_newsym(x, y,
+                                      see_self ? "hero-visible"
+                                               : "hero-map-location",
+                                      1);
 
             /* update map information for <u.ux,u.uy> (remembered topology
                and object/known trap/terrain glyph) but only display it if
@@ -1014,6 +1047,7 @@ newsym(coordxy x, coordxy y)
                              || (!worm_tail && (tp_sensemon(mon)
                                                 || MATCH_WARN_OF_MON(mon))));
             if (mon && (see_it || (!worm_tail && Detect_monsters))) {
+                cosmic_display_log_newsym(x, y, "visible-mon", 1);
                 if (mon->mtrapped) {
                     struct trap *trap = t_at(x, y);
                     int tt = trap ? trap->ttyp : NO_TRAP;
@@ -1028,10 +1062,13 @@ newsym(coordxy x, coordxy y)
                                 see_it ? PHYSICALLY_SEEN : DETECTED,
                                 worm_tail);
             } else if (mon && mon_warning(mon) && !worm_tail) {
+                cosmic_display_log_newsym(x, y, "visible-warning", 1);
                 display_warning(mon);
             } else if (glyph_is_invisible(lev->glyph)) {
+                cosmic_display_log_newsym(x, y, "visible-invis", 1);
                 map_invisible(x, y);
             } else {
+                cosmic_display_log_newsym(x, y, "visible-map-location", 1);
                 _map_location(x, y, 1); /* map the location */
             }
         }
@@ -1039,6 +1076,7 @@ newsym(coordxy x, coordxy y)
     /* Can't see the location. */
     } else {
         if (u_at(x, y)) {
+            cosmic_display_log_newsym(x, y, "oos-self", 0);
             feel_location(u.ux, u.uy); /* forces an update */
 
             if (canspotself())
@@ -1048,11 +1086,13 @@ newsym(coordxy x, coordxy y)
                                   || (see_with_infrared(mon)
                                       && mon_visible(mon)))) != 0
                        || (Detect_monsters && !is_worm_tail(mon)))) {
+            cosmic_display_log_newsym(x, y, "oos-sensed-mon", 0);
             /* Seen or sensed monsters are printed every time.
                This also gets rid of any invisibility glyph. */
             display_monster(x, y, mon, see_it ? 0 : DETECTED,
                             is_worm_tail(mon) ? TRUE : FALSE);
         } else if (mon && mon_warning(mon) && !is_worm_tail(mon)) {
+            cosmic_display_log_newsym(x, y, "oos-warning", 0);
             display_warning(mon);
 
         /*
@@ -1077,6 +1117,7 @@ newsym(coordxy x, coordxy y)
          * They are dependent on the position being out of sight.
          */
         } else if (Is_rogue_level(&u.uz)) {
+            cosmic_display_log_newsym(x, y, "oos-remembered", 0);
             if (lev->glyph == cmap_to_glyph(S_litcorr) && lev->typ == CORR)
                 show_glyph(x, y, lev->glyph = cmap_to_glyph(S_corr));
             else if (lev->glyph == cmap_to_glyph(S_room) && lev->typ == ROOM
@@ -1085,6 +1126,7 @@ newsym(coordxy x, coordxy y)
             else
                 goto show_mem;
         } else if (!lev->waslit || (flags.dark_room && iflags.use_color)) {
+            cosmic_display_log_newsym(x, y, "oos-remembered", 0);
             if (lev->glyph == cmap_to_glyph(S_litcorr) && lev->typ == CORR)
                 show_glyph(x, y, lev->glyph = cmap_to_glyph(S_corr));
             else if (lev->glyph == cmap_to_glyph(S_room) && lev->typ == ROOM)
@@ -1092,10 +1134,14 @@ newsym(coordxy x, coordxy y)
             else
                 goto show_mem;
         } else {
+            cosmic_display_log_newsym(x, y, "oos-remembered", 0);
  show_mem:
             show_glyph(x, y, lev->glyph);
         }
     }
+    cosmic_display_clear_newsym_branch();
+    cosmic_display_clear_maploc_branch();
+    cosmic_display_clear_cell();
 }
 
 #undef is_worm_tail
@@ -1532,6 +1578,7 @@ see_monsters(void)
 
     if (gd.defer_see_monsters)
         return;
+    cosmic_display_push_owner("see_monsters");
 
     /* steed and unseen engulfer/holder/holdee are recognized via touch
        even if they aren't going to be rendered; other monsters
@@ -1567,6 +1614,7 @@ see_monsters(void)
     /* when mounted, hero's location gets caught by monster loop */
     if (!u.usteed)
         newsym(u.ux, u.uy);
+    cosmic_display_pop_owner("see_monsters");
 }
 
 staticfn void
@@ -1600,6 +1648,8 @@ see_objects(void)
 {
     struct obj *obj;
 
+    cosmic_display_push_owner("see_objects");
+
     for (obj = fobj; obj; obj = obj->nobj)
         if (vobj_at(obj->ox, obj->oy) == obj)
             newsym(obj->ox, obj->oy);
@@ -1609,6 +1659,7 @@ see_objects(void)
        inventory which includes glyphs should also be affected, so do this
        for all interfaces in case any feature that for persistent inventory */
     update_inventory();
+    cosmic_display_pop_owner("see_objects");
 }
 
 /* mark the top object of nearby stacks as having been seen, and if
@@ -1654,11 +1705,14 @@ see_traps(void)
     struct trap *trap;
     int glyph;
 
+    cosmic_display_push_owner("see_traps");
+
     for (trap = gf.ftrap; trap; trap = trap->ntrap) {
         glyph = _glyph_at(trap->tx, trap->ty);
         if (glyph_is_trap(glyph))
             newsym(trap->tx, trap->ty);
     }
+    cosmic_display_pop_owner("see_traps");
 }
 
 /*  glyph, ttychar, framecolor,
@@ -1759,6 +1813,7 @@ docrt_flags(int refresh_flags)
         return; /* display isn't ready yet */
 
     program_state.in_docrt = TRUE;
+    cosmic_display_push_owner("docrt_flags");
 
     if (redrawonly) {
         redraw_map(FALSE);
@@ -1801,7 +1856,7 @@ docrt_flags(int refresh_flags)
     /* overlay with monsters */
     see_monsters();
 
- post_map:
+post_map:
 
     if (!maponly) {
         /* perm_invent */
@@ -1810,6 +1865,7 @@ docrt_flags(int refresh_flags)
         SET_BOTLX(); /* force a redraw of the bottom lines */
         /* note: caller needs to call bot() to actually redraw status */
     }
+    cosmic_display_pop_owner("docrt_flags");
     program_state.in_docrt = FALSE;
 }
 
@@ -2260,6 +2316,14 @@ flush_screen(int cursor_on_u)
     /* 5.0: don't update map, status, or perm_invent during save/restore */
     if (_suppress_map_output())
         return;
+
+    repaint_log("flush hp=%d cursor=%d botl=%d botlx=%d time=%d",
+                (int) u.uhp, cursor_on_u, (int) disp.botl,
+                (int) disp.botlx, (int) disp.time_botl);
+    repaint_debug_log("owner=display.flush_screen scope=%s hp=%d cursor=%d botl=%d botlx=%d time=%d",
+                      repaint_debug_get_scope() ? repaint_debug_get_scope() : "-",
+                      (int) u.uhp, cursor_on_u, (int) disp.botl,
+                      (int) disp.botlx, (int) disp.time_botl);
 
     if (cursor_on_u == -1)
         delay_flushing = !delay_flushing;

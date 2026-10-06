@@ -36,6 +36,17 @@ static const char *rng_caller_func = NULL;
    ^dbg.<channel> lines into the log (#1724).  PES ignores every ^dbg. line,
    so turning a channel on never changes parity. */
 static const char *trace_mask = (const char *) 0;
+static const char *repaint_debug_scope = (const char *) 0;
+#define COSMIC_OWNER_STACK_SIZE 32
+static const char *cosmic_owner_stack[COSMIC_OWNER_STACK_SIZE];
+static int cosmic_owner_depth = 0;
+static coordxy cosmic_cell_x = 0;
+static coordxy cosmic_cell_y = 0;
+static boolean cosmic_cell_active = FALSE;
+static const char *cosmic_newsym_branch = (const char *) 0;
+static const char *cosmic_maploc_branch = (const char *) 0;
+static const char *cosmic_rng_kind = (const char *) 0;
+staticfn const char *cosmic_display_current_owner(void);
 
 void
 rng_log_init(void)
@@ -84,6 +95,35 @@ dbg_log(const char *channel, const char *fmt, ...)
     vfprintf(rng_logfile, fmt, ap);
     va_end(ap);
     fputc('\n', rng_logfile);
+}
+
+boolean
+rng_log_enabled(void)
+{
+    return rng_logfile ? TRUE : FALSE;
+}
+
+void
+rng_log_set_caller(const char *file, int line, const char *func)
+{
+    rng_caller_file = file;
+    rng_caller_line = line;
+    rng_caller_func = func;
+}
+
+long
+rng_log_get_position(void)
+{
+    if (!rng_logfile)
+        return -1L;
+    (void) fflush(rng_logfile);
+    return ftell(rng_logfile);
+}
+
+int
+rng_log_get_call_count(void)
+{
+    return rng_call_count;
 }
 
 #define MIDLOG_STACK_SIZE 16
@@ -148,32 +188,177 @@ midlog_exit_ptr(const char *fn, const void *result,
 }
 
 boolean
-rng_log_enabled(void)
+cosmic_display_log_enabled(void)
 {
-    return rng_logfile ? TRUE : FALSE;
+    return harness_trace_on("display");
+}
+
+staticfn const char *
+cosmic_display_current_owner(void)
+{
+    if (cosmic_owner_depth <= 0)
+        return (const char *) 0;
+    return cosmic_owner_stack[cosmic_owner_depth - 1];
 }
 
 void
-rng_log_set_caller(const char *file, int line, const char *func)
+cosmic_display_push_owner(const char *owner)
 {
-    rng_caller_file = file;
-    rng_caller_line = line;
-    rng_caller_func = func;
+    const char *parent;
+
+    if (!cosmic_display_log_enabled())
+        return;
+    parent = cosmic_display_current_owner();
+    if (cosmic_owner_depth < COSMIC_OWNER_STACK_SIZE)
+        cosmic_owner_stack[cosmic_owner_depth] = owner;
+    cosmic_owner_depth++;
+    dbg_log("display", ".owner_begin[owner=%s depth=%d%s%s]",
+            owner ? owner : "?", cosmic_owner_depth,
+            parent ? " parent=" : "",
+            parent ? parent : "");
 }
 
-long
-rng_log_get_position(void)
+void
+cosmic_display_pop_owner(const char *owner)
 {
-    if (!rng_logfile)
-        return -1L;
-    (void) fflush(rng_logfile);
-    return ftell(rng_logfile);
+    const char *current;
+
+    if (!cosmic_display_log_enabled())
+        return;
+    current = cosmic_display_current_owner();
+    dbg_log("display", ".owner_end[owner=%s depth=%d%s%s]",
+            owner ? owner : "?", cosmic_owner_depth,
+            current ? " current=" : "",
+            current ? current : "");
+    if (cosmic_owner_depth > 0)
+        --cosmic_owner_depth;
 }
 
-int
-rng_log_get_call_count(void)
+void
+cosmic_display_set_cell(coordxy x, coordxy y)
 {
-    return rng_call_count;
+    cosmic_cell_x = x;
+    cosmic_cell_y = y;
+    cosmic_cell_active = TRUE;
+}
+
+void
+cosmic_display_clear_cell(void)
+{
+    cosmic_cell_x = 0;
+    cosmic_cell_y = 0;
+    cosmic_cell_active = FALSE;
+}
+
+void
+cosmic_display_set_newsym_branch(const char *branch)
+{
+    cosmic_newsym_branch = branch;
+}
+
+void
+cosmic_display_clear_newsym_branch(void)
+{
+    cosmic_newsym_branch = (const char *) 0;
+}
+
+void
+cosmic_display_set_maploc_branch(const char *branch)
+{
+    cosmic_maploc_branch = branch;
+}
+
+void
+cosmic_display_clear_maploc_branch(void)
+{
+    cosmic_maploc_branch = (const char *) 0;
+}
+
+void
+cosmic_display_prepare_rng_kind(const char *kind)
+{
+    cosmic_rng_kind = kind;
+}
+
+void
+cosmic_display_log_newsym(coordxy x, coordxy y, const char *branch, int cansee)
+{
+    if (!cosmic_display_log_enabled())
+        return;
+    cosmic_display_set_cell(x, y);
+    cosmic_display_set_newsym_branch(branch);
+    dbg_log("display", ".newsym[owner=%s x=%d y=%d cansee=%d branch=%s]",
+            cosmic_display_current_owner()
+                ? cosmic_display_current_owner()
+                : "?",
+            x, y, cansee, branch ? branch : "?");
+}
+
+void
+cosmic_display_log_maploc(coordxy x, coordxy y, const char *branch, int show)
+{
+    if (!cosmic_display_log_enabled())
+        return;
+    cosmic_display_set_cell(x, y);
+    cosmic_display_set_maploc_branch(branch);
+    dbg_log("display", ".maploc[owner=%s x=%d y=%d show=%d branch=%s]",
+            cosmic_display_current_owner()
+                ? cosmic_display_current_owner()
+                : "?",
+            x, y, show, branch ? branch : "?");
+}
+
+void
+cosmic_display_log_tty_menu_show(
+    int window, const char *type, int offx, int offy,
+    long maxrow, long maxcol, int overlay, int fullscreen, int blocking)
+{
+    if (!cosmic_display_log_enabled())
+        return;
+    dbg_log("display",
+        ".tty_menu_show[owner=%s win=%d type=%s offx=%d offy=%d maxrow=%ld maxcol=%ld overlay=%d fullscreen=%d blocking=%d]",
+        cosmic_display_current_owner() ? cosmic_display_current_owner() : "?",
+        window, type ? type : "?", offx, offy, maxrow, maxcol, overlay,
+        fullscreen, blocking);
+}
+
+void
+cosmic_display_log_tty_menu_draw(
+    int window, const char *type, int row0, int rowN,
+    long page_lines, int npages, int curr_page, const char *morestr)
+{
+    if (!cosmic_display_log_enabled())
+        return;
+    dbg_log("display",
+        ".tty_menu_draw[owner=%s win=%d type=%s row0=%d rowN=%d page_lines=%ld page=%d npages=%d%s%s]",
+        cosmic_display_current_owner() ? cosmic_display_current_owner() : "?",
+        window, type ? type : "?", row0, rowN, page_lines, curr_page,
+        npages, morestr ? " more=" : "", morestr ? morestr : "");
+}
+
+void
+cosmic_display_log_tty_menu_hide(int window, const char *type, int active,
+                                 int clearscreen)
+{
+    if (!cosmic_display_log_enabled())
+        return;
+    dbg_log("display",
+        ".tty_menu_hide[owner=%s win=%d type=%s active=%d clearscreen=%d]",
+        cosmic_display_current_owner() ? cosmic_display_current_owner() : "?",
+        window, type ? type : "?", active, clearscreen);
+}
+
+void
+cosmic_display_log_tty_menu_erase(
+    int window, const char *type, int x0, int y0, int x1, int y1,
+    int clear, int restore)
+{
+    if (!cosmic_display_log_enabled())
+        return;
+    dbg_log("display",
+        ".tty_menu_erase[owner=%s win=%d type=%s x0=%d y0=%d x1=%d y1=%d clear=%d restore=%d]",
+        cosmic_display_current_owner() ? cosmic_display_current_owner() : "?",
+        window, type ? type : "?", x0, y0, x1, y1, clear, restore);
 }
 
 static void
@@ -236,6 +421,67 @@ event_log(const char *fmt, ...)
     vfprintf(rng_logfile, fmt, ap);
     va_end(ap);
     fputc('\n', rng_logfile);
+}
+
+/* ^dbg.repaint[...]: the flush/bot/more/yn/mark repaint trace. */
+void
+repaint_log(const char *fmt, ...)
+{
+    va_list ap;
+
+    if (!harness_trace_on("repaint"))
+        return;
+    fputs("^dbg.repaint[", rng_logfile);
+    va_start(ap, fmt);
+    vfprintf(rng_logfile, fmt, ap);
+    va_end(ap);
+    fputs("]\n", rng_logfile);
+}
+
+/* ^dbg.repaint_debug[...]: the owner-tagged repaint trace, prefixed with
+   the step, command path and key being processed. */
+void
+repaint_debug_log(const char *fmt, ...)
+{
+    va_list ap;
+    long step_index;
+    const char *step_path;
+    int step_key;
+
+    if (!harness_trace_on("repaint_debug"))
+        return;
+    fputs("^dbg.repaint_debug[", rng_logfile);
+    step_index = repaint_debug_get_step_index();
+    if (step_index >= 0L)
+        fprintf(rng_logfile, "step=%ld ", step_index + 1L);
+    step_path = repaint_debug_get_step_path();
+    if (step_path && *step_path)
+        fprintf(rng_logfile, "path=%s ", step_path);
+    step_key = repaint_debug_get_step_key();
+    if (step_key >= 0)
+        fprintf(rng_logfile, "key=%d ", step_key);
+    va_start(ap, fmt);
+    vfprintf(rng_logfile, fmt, ap);
+    va_end(ap);
+    fputs("]\n", rng_logfile);
+}
+
+void
+repaint_debug_set_scope(const char *scope)
+{
+    repaint_debug_scope = scope;
+}
+
+void
+repaint_debug_clear_scope(void)
+{
+    repaint_debug_scope = (const char *) 0;
+}
+
+const char *
+repaint_debug_get_scope(void)
+{
+    return repaint_debug_scope;
 }
 
 #ifdef USE_ISAAC64
@@ -305,10 +551,24 @@ rn2_on_display_rng(int x)
 {
     int result = (isaac64_next_uint64(&rnglist[DISP].rng_state) % x);
 
-    /* ^dbg.disp_rng[n=N idx=R] @ caller.  A display-RNG call is not a
-       core RNG call, so it does not advance rng_call_count. */
+    /* ^dbg.disp_rng[n=N idx=R ...] @ caller.  A display-RNG call is not
+       a core RNG call, so it does not advance rng_call_count.  With the
+       display channel on as well, the line names the owner, the kind of
+       draw, the cell and the newsym/maploc branch. */
     if (harness_trace_on("disp_rng")) {
         fprintf(rng_logfile, "^dbg.disp_rng[n=%d idx=%d", x, result);
+        if (cosmic_display_log_enabled())
+            fprintf(rng_logfile, " owner=%s kind=%s x=%d y=%d%s%s%s%s",
+                    cosmic_display_current_owner()
+                        ? cosmic_display_current_owner()
+                        : "?",
+                    cosmic_rng_kind ? cosmic_rng_kind : "?",
+                    cosmic_cell_active ? cosmic_cell_x : -1,
+                    cosmic_cell_active ? cosmic_cell_y : -1,
+                    cosmic_newsym_branch ? " newsym=" : "",
+                    cosmic_newsym_branch ? cosmic_newsym_branch : "",
+                    cosmic_maploc_branch ? " maploc=" : "",
+                    cosmic_maploc_branch ? cosmic_maploc_branch : "");
         fputc(']', rng_logfile);
         if (rng_caller_file) {
             if (rng_caller_func)
@@ -320,6 +580,7 @@ rn2_on_display_rng(int x)
         }
         fputc('\n', rng_logfile);
     }
+    cosmic_rng_kind = (const char *) 0;
     return result;
 }
 

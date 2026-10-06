@@ -183,8 +183,11 @@
  * random_object() won't return STRANGE_OBJECT or the generic objects.
  * -/+ FIRST_OBJECT is used to skip it and them.
  */
-#define random_monster(rng) ((*rng)(NUMMONS))
-#define random_object(rng) ((*rng)(NUM_OBJECTS - FIRST_OBJECT) + FIRST_OBJECT)
+#define random_monster(rng) \
+    (cosmic_display_prepare_rng_kind("mon"), (*rng)(NUMMONS))
+#define random_object(rng) \
+    (cosmic_display_prepare_rng_kind("obj"), \
+     (*rng)(NUM_OBJECTS - FIRST_OBJECT) + FIRST_OBJECT)
 
 /*
  * what_obj()

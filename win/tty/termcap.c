@@ -756,8 +756,50 @@ void nomux_clear_screen(void) {
         }
 }
 
+/* ── Screen-write caller attribution (the bt trace channel) ────────────────
+ * The screen-channel analog of the rng "@ caller" annotation. Every visible
+ * cell change funnels through nomux_putch (writes) and nomux_clear_to_eol
+ * (clears), so a backtrace here attributes any screen-cell change to its C
+ * caller chain.  With NETHACK_TRACE=bt:
+ *   NETHACK_TRACE_BT_ROW=<r>          trace ops touching row r (required)
+ *   NETHACK_TRACE_BT_COL=<c>          restrict to cell (r,c)
+ *   NETHACK_TRACE_BT_SEQ=<lo>[:<hi>]  restrict to a marker-seq window
+ * Each hit writes a ^dbg.bt line and one ^dbg.bt.frame line per frame into
+ * the RNG log; scripts/screen-write-trace.mjs reads them. */
+#include <execinfo.h>
+static int nbt_row = -2, nbt_col = -1, nbt_lo = -1, nbt_hi = -1;
+static void nbt_setup(void) {
+    const char *e;
+    if (nbt_row != -2) return;
+    e = harness_getenv("NETHACK_TRACE_BT_ROW"); nbt_row = e ? atoi(e) : -1;
+    e = harness_getenv("NETHACK_TRACE_BT_COL"); nbt_col = e ? atoi(e) : -1;
+    e = harness_getenv("NETHACK_TRACE_BT_SEQ");
+    if (e) { const char *c; nbt_lo = atoi(e); c = strchr(e, ':'); nbt_hi = c ? atoi(c + 1) : nbt_lo; }
+}
+/* is_clear: the op clears [col,79] on `row` (hits target if col<=target_col);
+ * otherwise it writes the single cell (row,col). */
+static void nbt_dump(const char *op, int row, int col, int is_clear, const char *extra) {
+    if (!harness_trace_on("bt")) return;
+    nbt_setup();
+    if (nbt_row < 0 || row != nbt_row) return;
+    if (nbt_col >= 0 && (is_clear ? (col > nbt_col) : (col != nbt_col))) return;
+    if (nbt_lo >= 0 && (nomux_seq < nbt_lo || nomux_seq > nbt_hi)) return;
+    {
+        void *bt[48];
+        int n = backtrace(bt, 48);
+        char **sy = backtrace_symbols(bt, n);
+        int i;
+        dbg_log("bt", "[seq=%d op=%s row=%d col=%d%s]",
+                nomux_seq, op, row, col, extra ? extra : "");
+        for (i = 0; i < n && i < 20; i++)
+            dbg_log("bt", ".frame[%s]", sy ? sy[i] : "?");
+        if (sy) free(sy);
+    }
+}
+
 void nomux_clear_to_eol(int row, int col) {
     int c;
+    nbt_dump("clear_to_eol", row, col, 1, (char *) 0);
     if (row < 0 || row >= 24) return;
     for (c = (col < 0 ? 0 : col); c < 80; c++) {
         nomux_buf[row][c].ch = ' ';
@@ -874,6 +916,13 @@ void nomux_putch(int ch) {
     if (!ttyDisplay) return;
     row = ttyDisplay->cury;
     col = ttyDisplay->curx;
+    if (nbt_row >= 0 || nbt_row == -2) {
+        char xtra[64];
+        snprintf(xtra, sizeof xtra, " ch='%c' fg=%d attr=%d dec=%d",
+                 (ch >= 32 && ch < 127) ? ch : '?',
+                 nomux_fg_cur, nomux_attr_cur, nomux_decgfx_cur);
+        nbt_dump("putch", row, col, 0, xtra);
+    }
     if (SYMHANDLING(H_UTF8)) {
         nomux_utf8_putch(ch, row, col);
         return;
