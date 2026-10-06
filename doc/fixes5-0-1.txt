@@ -148,6 +148,11 @@ a des.map or mapfragment whose rows differed in length read the rows after a
 	short one shifted, and cells near the end past the end of the string
 #force on a box kept the door of an earlier lock-picking attempt, so a later
 	resumed attempt could lock or unlock that door, even on another level
+Tou-loca.lua and Tou-strt.lua had Lua syntax errors (a stray "end=", missing
+	commas before x=), so the Tourist quest home and locate levels failed to
+	load and were replaced by random mazes; Tou-strt.lua also gave six named
+	monsters their species and position as table entries des.monster()
+	does not read, so they were random monsters at random spots
 
 
 Platform- and/or Interface-Specific Fixes
