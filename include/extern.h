@@ -2808,6 +2808,13 @@ extern int rnz(int);
 extern void init_random(int(*fn)(int));
 extern void reseed_random(int(*fn)(int));
 extern void shuffle_int_array(int *, int) NONNULLARG1;
+/* Teleport harness environment (#1724): the one reader of the harness's
+   NETHACK_* variables; unset and empty both read as NULL. */
+extern const char *harness_getenv(const char *);
+/* Deterministic qsort wrapper. */
+extern void nh_deterministic_qsort(void *, size_t, size_t,
+                                   int (QSORTCALLBACK *)(const void *,
+                                                         const void *));
 
 /* ### role.c ### */
 

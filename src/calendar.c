@@ -28,11 +28,22 @@
 
 staticfn struct tm *getlt(void);
 
+/* [parity] accumulated per-key simulated-clock advance (issue #1076); getnow()
+ * adds it, and the tty input layer (wintty.c nh_keytime_advance) increments it
+ * per key read from NETHACK_KEYTIMES so C and JS advance the clock identically. */
+long nh_sim_offset_seconds = 0L;
+
 time_t
 getnow(void)
 {
+    const char *fixed_dt = harness_getenv("NETHACK_FIXED_DATETIME");
     time_t datetime = 0;
 
+    if (fixed_dt) {
+        time_t parsed = time_from_yyyymmddhhmmss((char *) fixed_dt);
+        if (parsed != (time_t) 0)
+            return parsed + nh_sim_offset_seconds;
+    }
     (void) time((TIME_type) &datetime);
     return datetime;
 }
@@ -122,6 +133,7 @@ time_from_yyyymmddhhmmss(char *buf)
     int k;
     time_t timeresult = (time_t) 0;
     struct tm t, *lt;
+    time_t now;
     char *d, *p, y[5], mo[3], md[3], h[3], mi[3], s[3];
 
     if (buf && strlen(buf) == NHDATELEN) {
@@ -150,7 +162,9 @@ time_from_yyyymmddhhmmss(char *buf)
         for (k = 0; k < 2; ++k)
             *p++ = *d++;
         *p = '\0';
-        lt = getlt();
+        /* Avoid recursion when getnow() itself is using fixed datetime. */
+        (void) time((TIME_type) &now);
+        lt = localtime((LOCALTIME_type) &now);
         if (lt) {
             t = *lt;
             t.tm_year = atoi(y) - 1900;

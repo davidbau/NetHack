@@ -94,6 +94,56 @@ extern void msmsg(const char *, ...);
 #define HUPSKIP_RESULT(RES) /*empty*/
 #endif /* ?HANGUPHANDLING */
 
+/* [parity] per-key simulated-clock advance (issue #1076). getnow() (calendar.c)
+ * adds nh_sim_offset_seconds; NETHACK_KEYTIMES supplies one seconds-delta per
+ * key read, consumed in lockstep with tty_nhgetch so C and JS advance the wall
+ * clock identically. */
+extern long nh_sim_offset_seconds; /* defined in calendar.c */
+static long *nh_keytimes = (long *) 0;
+static int nh_keytimes_count = 0;
+static int nh_keytimes_idx = 0;
+static boolean nh_keytimes_inited = FALSE;
+
+static void
+nh_keytimes_init(void)
+{
+    const char *path;
+    FILE *fp;
+    long v;
+    int cap = 0;
+
+    if (nh_keytimes_inited)
+        return;
+    nh_keytimes_inited = TRUE;
+    path = harness_getenv("NETHACK_KEYTIMES");
+    if (!path)
+        return;
+    fp = fopen(path, "r");
+    if (!fp)
+        return;
+    while (fscanf(fp, "%ld", &v) == 1) {
+        if (nh_keytimes_count >= cap) {
+            long *tmp;
+            cap = cap ? cap * 2 : 256;
+            tmp = (long *) realloc(nh_keytimes, (size_t) cap * sizeof (long));
+            if (!tmp)
+                break;
+            nh_keytimes = tmp;
+        }
+        nh_keytimes[nh_keytimes_count++] = v;
+    }
+    (void) fclose(fp);
+}
+
+/* advance the simulated clock by the next per-key delta (one per key read) */
+static void
+nh_keytime_advance(void)
+{
+    nh_keytimes_init();
+    if (nh_keytimes && nh_keytimes_idx < nh_keytimes_count)
+        nh_sim_offset_seconds += nh_keytimes[nh_keytimes_idx++];
+}
+
 /* Interface definition, for windows.c */
 struct window_procs tty_procs = {
     WPID(tty),
@@ -4110,6 +4160,7 @@ tty_nhgetch(void)
         print_vt_code2(AVTC_SELECT_WINDOW, tmp);
     }
 #endif /* TTY_TILES_ESCCODES */
+    nh_keytime_advance(); /* [parity] advance simulated clock per key (#1076) */
     return i;
 }
 

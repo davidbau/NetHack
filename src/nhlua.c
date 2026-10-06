@@ -2918,9 +2918,18 @@ UNSAFEIO:
     }
     if (lflags & NHL_SB_MATH) {
         luaL_requiref(L, LUA_MATHLIBNAME, luaopen_math, 1);
-        /* XXX Note that math.random uses Lua's built-in xoshiro256**
-         * algorithm regardless of what the rest of the game uses.
-         * Fixing this would require changing lmathlib.c. */
+        /* Seed Lua's math.random (xoshiro256**) from the game seed so
+         * that math.random() calls in level scripts produce deterministic,
+         * reproducible results. */
+        {
+            const char *env_seed = harness_getenv("NETHACK_SEED");
+            if (env_seed) {
+                unsigned long seed = strtoul(env_seed, NULL, 10);
+                lua_getfield(L, -1, "randomseed");
+                lua_pushinteger(L, (lua_Integer) seed);
+                lua_call(L, 1, 0);
+            }
+        }
         lua_pop(L, 1);
     }
     if (lflags & NHL_SB_UTF8) {

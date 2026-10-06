@@ -1585,6 +1585,15 @@ typedef uint32_t mmflags_nht;     /* makemon MM_ flags */
 #include "savefile.h"
 #include "decl.h"
 
+/*
+ * Harness determinism: replace libc qsort() with a stable wrapper so
+ * equal-key ordering does not vary by platform libc behavior.
+ */
+#if !defined(DETERMINISTIC_QSORT_IMPL)
+#define qsort(base, nmemb, size, compar) \
+    nh_deterministic_qsort((base), (nmemb), (size), (compar))
+#endif
+
 #endif  /* RECOVER_C */
 
 #endif /* HACK_H */

@@ -79,7 +79,13 @@ populate_nomakedefs(struct version_info *version)
      *
      */
 
-    Snprintf(tmpbuf1, sizeof tmpbuf1, "%s %s", __DATE__, __TIME__);
+    /* Deterministic build banner: pin the "build date" string to a
+     * fixed value so the rendered version banner matches across
+     * recordings made on different machines / different days. The
+     * format must be 20 chars "Mon DD YYYY HH:MM:SS" — same shape as
+     * __DATE__ " " __TIME__ — because the surrounding code parses
+     * fixed offsets out of it (year at 7, mday at 4, hour at 12, …). */
+    Snprintf(tmpbuf1, sizeof tmpbuf1, "%s", "May  2 2026 12:00:00");
     /* "Feb 12 1996 23:59:01"
         01234567890123456789  */
     if ((int) strlen(tmpbuf1) == 20) {

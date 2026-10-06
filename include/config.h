@@ -424,7 +424,7 @@
  *      and obtain an identical copy as was produced by a previous build.
  *      Not necessary for normal game play....
  */
-/* #define REPRODUCIBLE_BUILD */ /* use getenv("SOURCE_DATE_EPOCH") instead
+#define REPRODUCIBLE_BUILD /* use getenv("SOURCE_DATE_EPOCH") instead
                                     of current time when creating date.h */
 
 /*

@@ -798,6 +798,16 @@ port_insert_pastebuf(char *buf)
 unsigned long
 sys_random_seed(void)
 {
+    /* Harness comparison testing: if NETHACK_SEED is set, use it directly.
+     * Leave has_strong_rngseed false so reseed_random() remains a no-op. */
+    {
+        const char *env_seed = harness_getenv("NETHACK_SEED");
+        if (env_seed) {
+            unsigned long seed = strtoul(env_seed, NULL, 10);
+            return seed;
+        }
+    }
+
     unsigned long seed = 0L;
     unsigned long pid = (unsigned long) getpid();
     boolean no_seed = TRUE;
