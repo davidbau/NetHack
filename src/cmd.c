@@ -113,6 +113,8 @@ staticfn void yn_func_menu_opt(winid, char, const char *, char);
 staticfn boolean yn_function_menu(const char *, const char *, char, char *);
 staticfn int domouseaction(void);
 staticfn int doterrain(void);
+staticfn int doundo(void);
+staticfn int doredo(void);
 staticfn boolean u_have_seen_whole_selection(struct selectionvar *);
 staticfn boolean u_have_seen_bounds_selection(struct selectionvar *);
 staticfn boolean u_can_see_whole_selection(struct selectionvar *);
@@ -1728,6 +1730,22 @@ levltyp_to_name(int typ)
     return NULL;
 }
 
+/* [teleport] #undo and #redo: the game's host keeps the history and moves
+   the game; NetHack itself has none, so here they do nothing (in JS they
+   leave a request for the host, which acts on it if its undo option
+   is on).  Not autocompleted, so #u is still #untrap and #r #ride. */
+staticfn int
+doundo(void)
+{
+    return ECMD_OK;
+}
+
+staticfn int
+doredo(void)
+{
+    return ECMD_OK;
+}
+
 /* #terrain command -- show known map, inspired by crawl's '|' command */
 staticfn int
 doterrain(void)
@@ -2450,6 +2468,8 @@ struct ext_func_tab extcmdlist[] = {
               dowieldquiver, 0, NULL },
     { 'r',    "read", "read a scroll or spellbook",
               doread, 0, NULL },
+    { '\0',   "redo", "take back an undo",
+              doredo, IFBURIED | GENERALCMD, NULL },
     { C('r'), "redraw", "redraw screen",
               doredraw, IFBURIED | GENERALCMD | CMD_INSANE, NULL },
     { 'R',    "remove", "remove an accessory (ring, amulet, etc)",
@@ -2547,6 +2567,8 @@ struct ext_func_tab extcmdlist[] = {
               doturn, IFBURIED | AUTOCOMPLETE, NULL },
     { 'X',    "twoweapon", "toggle two-weapon combat",
               dotwoweapon, 0, NULL },
+    { '\0',   "undo", "take back the last move",
+              doundo, IFBURIED | GENERALCMD, NULL },
     { M('u'), "untrap", "untrap something",
               dountrap, AUTOCOMPLETE, NULL },
     { '<',    "up", "go up a staircase",

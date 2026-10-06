@@ -338,6 +338,8 @@ struct instance_flags {
     boolean menu_head_objsym; /* Show obj symbol in menu headings; controlled
                                * by 'menuobjsyms' */
     boolean menu_overlay;     /* Draw menus over the map */
+    boolean undo;             /* [teleport] ^Z, #undo and #redo move the
+                               * game; the game's host does it */
     boolean menu_requested;   /* Flag for overloaded use of 'm' prefix
                                * on some non-move commands */
     boolean menu_tab_sep;     /* Use tabs to separate option menu fields */

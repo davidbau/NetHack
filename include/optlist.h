@@ -809,6 +809,9 @@ static int optfn_##a(int, int, boolean, char *, char *);
     NHOPTB(tutorial, Advanced, 0, opt_out, set_in_config,
            On, Yes, No, No, NoAlias, &flags.tutorial, Term_False,
            "ask if you want the tutorial")
+    NHOPTB(undo, Advanced, 0, opt_out, set_in_game,
+           On, Yes, No, No, NoAlias, &iflags.undo, Term_False,
+           "^Z, #undo and #redo take back moves")
     NHOPTB(use_darkgray, Advanced, 0, opt_out, set_in_config,
            On, Yes, No, No, NoAlias, &iflags.wc2_darkgray, Term_False,
            "use bold black color instead of blue")

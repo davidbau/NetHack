@@ -1076,17 +1076,13 @@ shop_keeper(char rmno)
             return (struct monst *) 0;
         }
     } else {
-        /* NetHackJP / Upstream bugfix:
-         * Only flag an untrustworthy null shkp if this is actually a shop room
-         * (rmno >= ROOMOFFSET && svr.rooms[rmno - ROOMOFFSET].rtype >= SHOPBASE).
-         * Outside of shops or in non-shop rooms, a null shkp is completely normal.
-         */
         if (!level_status.shkready
             && rmno >= ROOMOFFSET
             && svr.rooms[rmno - ROOMOFFSET].rtype >= SHOPBASE) {
             int hmm UNUSED = 1;
-#if (NH_DEVEL_STATUS != NH_STATUS_RELEASED \
-     && NH_DEVEL_STATUS != NH_STATUS_POSTRELEASE)
+    /* teleport harness: compiled out, as in release builds; the check's
+       --More--s otherwise eat recorded keys (see 080-deviations) */
+#if 0
          if (wizard && !gw.whitelist_shk)
             impossible("debug: untrustworthy null shkp; level_status.shkready"
                         " is FALSE (%d, %d, %d, %d)",

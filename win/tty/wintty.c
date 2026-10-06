@@ -148,9 +148,12 @@ nh_keytime_advance(void)
 struct window_procs tty_procs = {
     WPID(tty),
     (0
-#ifdef TTY_PERM_INVENT
+     /* teleport patch 039: advertise perm_invent/perminv_mode in doset() on
+        the 80x24 tty.  TTY_PERM_INVENT is off on unix (windconf.h is only
+        #included under WIN32 in global.h), so the persistent-inventory window
+        code stays compiled out -- the option is listed and settable (flips
+        iflags.perm_invent) but draws no window, leaving 80x24 intact. */
      | WC_PERM_INVENT
-#endif
 #ifdef MSDOS
      | WC_TILED_MAP | WC_ASCII_MAP
 #endif
