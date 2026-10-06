@@ -6,6 +6,7 @@
 #define NEED_VARARGS /* comment line for pre-compiled headers */
 
 #include "hack.h"
+#include "wintty.h"  /* for NOMUX_CAPTURE define + nomux_capture_write_input_boundary decl (#460) */
 #ifndef NO_SIGNAL
 #include <signal.h>
 #endif
@@ -1677,6 +1678,26 @@ ATTRNORETURN void
 nh_terminate(int status)
 {
     program_state.in_moveloop = 0; /* won't be returning to normal play */
+
+#ifdef NOMUX_CAPTURE
+    /* Issue #460: capture the final post-topten screen state once,
+     * deterministically, before tearing down. nomux_raw_emit no longer
+     * writes the file per emit (that caused intermediate captures); the
+     * write at nhgetch is the normal sync point during gameplay, but
+     * after death/quit there's no further nhgetch — topten emits then
+     * we get here. This single call ensures the harness sees the final
+     * state (with all topten lines painted) when waiting for SEQ to
+     * advance. See termcap.c nomux_raw_emit for the matching comment. */
+    /* A forked child() that fails to exec also exits through here; its
+     * frame is not a screen the player sees, so only the game process
+     * captures (the parent's next input boundary is the real frame). */
+    {
+        extern int nomux_in_child;
+
+        if (!nomux_in_child)
+            nomux_capture_write_input_boundary();
+    }
+#endif
 
     l_nhcore_call(NHCORE_GAME_EXIT);
     /* don't bother to try to release memory if we're in panic mode, to

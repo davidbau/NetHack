@@ -521,6 +521,13 @@ tty_ascgraphics_hilite_fixup(void)
 void
 term_start_screen(void)
 {
+#ifdef NOMUX_CAPTURE
+    /* Returning to the tty screen means normal ttyDisplay cursor state is
+     * authoritative again.  Startup/config raw_print() output may have
+     * entered NOMUX raw shadow mode before windows were ready; do not let
+     * that shadow cursor leak into later in-game input markers. */
+    nomux_reset_raw_mode();
+#endif
     xputs(TI);
     xputs(VS);
 #ifdef PC9800
@@ -645,6 +652,507 @@ xputc(int c) /* actually char, but explicitly specify its widened type */
     return putchar(c);
 }
 
+#ifdef NOMUX_CAPTURE
+/* In-band sync markers for screen recording.
+ *
+ * When NOMUX_MARKERS=1 is set in the environment, NetHack emits OSC
+ * sequences to stdout at every input-wait boundary (and once at game
+ * end after topten output), each carrying the rendered screen state
+ * for that boundary.  A recorder reading stdout parses these markers
+ * and uses the embedded screen as the captured frame for the step.
+ *
+ * Marker wire format:
+ *   ESC ] 7777 ; KIND=input ; SEQ=N ; CX=cx ; CY=cy ; LOGPOS=P ; LEN=L BEL
+ *   <L bytes of screen content>
+ *
+ * The OSC body up through BEL contains only printable ASCII so the
+ * recorder can parse it unambiguously.  The L payload bytes that
+ * follow are the rendered screen serialization (escape-sequences
+ * preserved verbatim, no encoding) and may contain arbitrary bytes
+ * including ESC.  The recorder reads exactly L bytes after the BEL.
+ *
+ * KIND=input fires at tty_nhgetch / tty_nh_poskey blocking points and
+ * once at nh_terminate (post-topten final frame).  KIND=anim fires
+ * for intermediate animation frames (zap beams, knockback, thrown
+ * objects); these don't bump SEQ since they aren't input boundaries.
+ *
+ * When NOMUX_MARKERS is unset the emit is a no-op — the binary plays
+ * normally with no extra stdout output. */
+
+int
+nomux_markers_enabled(void)
+{
+    static int cached = -1;
+    if (cached < 0) {
+        const char *ev = harness_getenv("NOMUX_MARKERS");
+        cached = (ev && ev[0] != '0') ? 1 : 0;
+    }
+    return cached;
+}
+
+static int nomux_seq = 0;
+int nomux_anim_id = 0;
+int nomux_in_child = 0; /* set in child() after fork (unixunix.c) */
+
+/* Emit a single in-band marker carrying the current rendered screen.
+ * KIND distinguishes input boundaries from animation frames. */
+static void
+nomux_emit_marker(const char *kind)
+{
+    if (!nomux_markers_enabled())
+        return;
+
+    {
+        char *scr = nomux_capture_screen();
+        int cx, cy;
+        long logpos = rng_log_get_position();
+        size_t scr_len = scr ? strlen(scr) : 0;
+        nomux_get_cursor(&cx, &cy);
+        fprintf(stdout, "\x1b]7777;KIND=%s;SEQ=%d;ANIM=%d;CX=%d;CY=%d;LOGPOS=%ld;LEN=%zu\x07",
+                kind, nomux_seq, nomux_anim_id, cx, cy, logpos, scr_len);
+        if (scr_len > 0)
+            fwrite(scr, 1, scr_len, stdout);
+        fflush(stdout);
+    }
+}
+
+/* Called for intermediate animation frames: zap beams, hurtle/knockback
+ * steps, thrown-object trajectories, etc.  Bumps the per-animation id
+ * but NOT the input-boundary SEQ. */
+void
+nomux_capture_write_screen(void)
+{
+    nomux_anim_id++;
+    nomux_emit_marker("anim");
+}
+
+/* Called at every real input-wait boundary (tty_nhgetch, tty_nh_poskey)
+ * and once at nh_terminate after topten — the points where one
+ * authoritative frame should be captured per step.  Bumps SEQ. */
+void
+nomux_capture_write_input_boundary(void)
+{
+    nomux_seq++;
+    nomux_emit_marker("input");
+}
+
+/* NOMUX shadow frame buffer implementation */
+nomux_cell nomux_buf[24][80];
+static unsigned char nomux_fg_cur = 7;
+/* Extended 256-colour foreground, stored as index+1; 0 means none. */
+static unsigned int nomux_xfg_cur = 0;
+static unsigned char nomux_attr_cur = 0;
+static unsigned char nomux_decgfx_cur = 0;
+
+void nomux_clear_screen(void) {
+    int r, c;
+    for (r = 0; r < 24; r++)
+        for (c = 0; c < 80; c++) {
+            nomux_buf[r][c].ch = ' ';
+            nomux_buf[r][c].cp = 0;
+            nomux_buf[r][c].xfg = 0;
+            nomux_buf[r][c].fg = 7;
+            nomux_buf[r][c].attr = 0; nomux_buf[r][c].decgfx = 0;
+        }
+}
+
+void nomux_clear_to_eol(int row, int col) {
+    int c;
+    if (row < 0 || row >= 24) return;
+    for (c = (col < 0 ? 0 : col); c < 80; c++) {
+        nomux_buf[row][c].ch = ' ';
+        nomux_buf[row][c].cp = 0;
+        nomux_buf[row][c].fg = 7;
+        nomux_buf[row][c].xfg = 0;
+        nomux_buf[row][c].attr = 0;
+        /* Reset decgfx too: cl_end's job is to wipe a region, and a
+         * cleared cell shouldn't carry a graphics-mode flag from
+         * whatever character occupied that position before. Without
+         * this, leftover decgfx from the prior screen's map glyphs
+         * (walls, floors) leaks into menu indent columns and shows
+         * up in the wire as ESC-N space ESC-O around an otherwise
+         * blank cell — visually identical to a regular space, but
+         * not byte-equal across rebuilds or when comparing against
+         * a JS port that clears decgfx on every overwrite. */
+        nomux_buf[row][c].decgfx = 0;
+    }
+}
+
+/* ── Topline UTF-8 column debt ─────────────────────────────────────────────
+ * The message window writes RAW UTF-8 BYTES through topl_putsym(), which
+ * advances ttyDisplay->curx once per BYTE (topl.c: the default arm of the
+ * switch does a bare curx++ for every char handed to it).  A terminal
+ * advances once per GLYPH, so from the first multi-byte glyph onward C's
+ * curx runs (bytes - 1) columns ahead of the real cursor for the rest of
+ * that line.
+ *
+ * That discrepancy is genuine upstream behaviour, not something to correct:
+ * update_topl() word-wraps on strlen(bp) >= CO, so the inflated byte count
+ * is what decides where the topline breaks and whether a --More-- appears.
+ * But nomux_buf is a recording of the TERMINAL, so every cell write, every
+ * clear-to-eol and the reported cursor on that line have to be shifted back
+ * by the accumulated debt.
+ *
+ * This is NOT just the topline.  Menu and text windows take the same shape:
+ * pager.c's look_all/look_traps/look_engrs prefix each line with
+ * encglyph(glyph), tty_putmixed turns that into the customized glyph's raw
+ * UTF-8 bytes, and wintty.c's window loops advance curx once per byte while
+ * putchar()ing them one at a time.  So the accounting lives in nomux_putch
+ * itself, gated on SYMHANDLING(H_UTF8), and every writer inherits it.
+ *
+ * H_IBM and H_DEC keep the plain byte path: a single high-bit CP437 or VT100
+ * byte there must not be read as a UTF-8 lead, and 446 recorded sessions use
+ * those sets.
+ *
+ * The debt resets when the row changes, at home(), and in tty_curs() -- but
+ * only in tty_curs's MOVING arm.  Its `if (y == cy && x == cx) return;`
+ * early exit emits nothing and leaves the terminal where it was, which is
+ * exactly addtopl()'s `tty_curs(BASE_WINDOW, cw->curx + 1, cw->cury)`:
+ * concatenated text really does land right after the glyph, so that arm has
+ * to preserve the debt. */
+static int nomux_u8_row = -1;         /* row the debt applies to */
+static int nomux_u8_debt = 0;         /* columns curx leads the terminal by */
+static unsigned int nomux_u8_acc = 0; /* codepoint under construction */
+static int nomux_u8_pending = 0;      /* continuation bytes still due */
+static int nomux_u8_start = 0;        /* terminal column of that codepoint */
+
+void nomux_utf8_reset(void) {
+    nomux_u8_row = -1;
+    nomux_u8_debt = 0;
+    nomux_u8_pending = 0;
+}
+
+int nomux_col_debt(int row) {
+    return (row == nomux_u8_row) ? nomux_u8_debt : 0;
+}
+
+/* Write one cell.  cp == 0 records a byte, otherwise a codepoint (ch is
+   left blank so any consumer still reading the byte field sees a space
+   rather than a truncated UTF-8 fragment). */
+static void nomux_putcell(int row, int col, int ch, unsigned int cp) {
+    if (row < 0 || row >= 24 || col < 0 || col >= 80) return;
+    nomux_buf[row][col].ch = cp ? ' ' : (char) ch;
+    nomux_buf[row][col].cp = cp;
+    nomux_buf[row][col].fg = nomux_fg_cur;
+    nomux_buf[row][col].xfg = nomux_xfg_cur;
+    nomux_buf[row][col].attr = nomux_attr_cur;
+    nomux_buf[row][col].decgfx = nomux_decgfx_cur;
+}
+
+/* Reassemble a UTF-8 byte run into one cell and track the debt.  `col` is
+   the column C wrote at; callers that have already advanced curx pass the
+   corrected value the same way they always did. */
+static void nomux_utf8_putch(int ch, int row, int col) {
+    unsigned char c = (unsigned char) ch;
+
+    if (row != nomux_u8_row) {
+        nomux_u8_row = row;
+        nomux_u8_debt = 0;
+        nomux_u8_pending = 0;
+    }
+    if (col < 0) return;                 /* '\n': bookkeeping only */
+    if (nomux_u8_pending > 0 && (c & 0xC0) == 0x80) {
+        nomux_u8_acc = (nomux_u8_acc << 6) | (c & 0x3F);
+        nomux_u8_debt++;
+        if (--nomux_u8_pending == 0)
+            nomux_putcell(row, nomux_u8_start, ' ', nomux_u8_acc);
+        return;
+    }
+    nomux_u8_pending = 0;
+    if (c >= 0xC2) {
+        nomux_u8_start = col - nomux_u8_debt;
+        if ((c & 0xE0) == 0xC0) { nomux_u8_acc = c & 0x1F; nomux_u8_pending = 1; }
+        else if ((c & 0xF0) == 0xE0) { nomux_u8_acc = c & 0x0F; nomux_u8_pending = 2; }
+        else if ((c & 0xF8) == 0xF0) { nomux_u8_acc = c & 0x07; nomux_u8_pending = 3; }
+        if (nomux_u8_pending) return;
+    }
+    if (ch >= 32) nomux_putcell(row, col - nomux_u8_debt, c, 0);
+}
+
+void nomux_putch(int ch) {
+    int row, col;
+    if (!ttyDisplay) return;
+    row = ttyDisplay->cury;
+    col = ttyDisplay->curx;
+    if (SYMHANDLING(H_UTF8)) {
+        nomux_utf8_putch(ch, row, col);
+        return;
+    }
+    if (ch < 32) return;
+    /* A non-UTF8 writer on the debt row ends that run. */
+    if (row == nomux_u8_row) nomux_utf8_reset();
+    nomux_putcell(row, col, ch, 0);
+}
+
+/* Record a Unicode codepoint in the cell under the cursor.
+   Mirrors nomux_putch: the position comes from ttyDisplay and the CALLER
+   advances curx, because on the MAP one codepoint occupies one column
+   exactly as one byte does (g_pututf8 is called once per column). */
+void nomux_putcp(unsigned int cp) {
+    if (!ttyDisplay || !cp) return;
+    if (ttyDisplay->cury == nomux_u8_row) nomux_utf8_reset();
+    nomux_putcell(ttyDisplay->cury, ttyDisplay->curx, ' ', cp);
+}
+
+
+void nomux_set_attr(int attr) {
+    switch (attr) {
+    case ATR_INVERSE: nomux_attr_cur |= 1; break;
+    case ATR_BOLD:    nomux_attr_cur |= 2; break;
+    case ATR_ULINE:   nomux_attr_cur |= 4; break;
+    }
+}
+void nomux_end_attr(void) { nomux_attr_cur = 0; }
+void nomux_set_fg(int color) {
+    /* Mirror C's wc2_darkgray remap: when that option is on,
+     * hilites[CLR_BLACK] is wired to BRIGHT_BLACK so the terminal
+     * receives [90m instead of [30m (plain black is invisible
+     * against a black background).  The shadow buffer must track
+     * the *visible* color, not the nominal index, or the capture
+     * will diverge from what the terminal (and JS) sees. */
+    if (color == CLR_BLACK && iflags.wc2_darkgray)
+        color = 8;  /* index 8 -> ANSI 90m (bright black / dark gray) */
+    nomux_fg_cur = (color < 0 || color >= 16) ? 7 : (unsigned char) color;
+    nomux_xfg_cur = 0;
+}
+void nomux_end_fg(void) { nomux_fg_cur = 7; nomux_xfg_cur = 0; }
+
+/* term_start_extracolor() picks an exact colour; it supersedes any basic one
+   until the next term_start_color()/term_end_color(). */
+void nomux_set_extracolor(unsigned int idx256) { nomux_xfg_cur = idx256 + 1; }
+
+/* term_end_extracolor() emits ESC[0m, which resets the terminal to its
+   default foreground, so the shadow buffer has to drop the exact colour too.
+   Without this nomux_xfg_cur stayed set after the last customized glyph of a
+   frame and every cell written afterwards inherited it -- most visibly the
+   STATUS line, which recorded as `ESC[38;5;33m HP:13 ESC[39m` under Enhanced2
+   while a real terminal (and JS) showed it plain. */
+void nomux_end_extracolor(void) { nomux_xfg_cur = 0; }
+
+static int nomux_sgr_fg(int fg) {
+    if (fg >= 0 && fg <= 7) return 30 + fg;
+    if (fg >= 8 && fg <= 15) return 90 + (fg - 8);
+    return 37;
+}
+
+/* Full-map colored captures can be much larger than a plain 24x80 screen:
+ * each cell may carry SGR and DEC graphics transitions.  Gehennom water/lava
+ * maps with dark-gray recoloring exceeded the old 24*256 buffer, corrupting
+ * subsequent OSC marker headers into the payload.  Budget 32 bytes/cell plus
+ * row separators/resets. */
+static char nomux_out[(24 * 80 * 32) + (24 * 16) + 1];
+char *nomux_capture_screen(void) {
+    char *p = nomux_out;
+    int row, col, end, cur_fg, cur_attr;
+    unsigned int cur_xfg;
+    /* tmux capture-pane -e format:
+     * - Color start: \033[97m (just the code, no 0; prefix)
+     * - Color end (to default): \033[39m (fg reset only)
+     * - Attr start: \033[7m (inverse), \033[1m (bold)
+     * - Attr end: \033[27m (end inverse), \033[22m (end bold)
+     * - Full reset: \033[0m only at end-of-line or when both attr+color reset
+     * Incremental: only emit what changes between cells. */
+    for (row = 0; row < 24; row++) {
+        cur_fg = 7; cur_attr = 0; cur_xfg = 0;
+        end = 79;
+        while (end >= 0
+               && nomux_buf[row][end].cp == 0
+               && (nomux_buf[row][end].ch == ' ' || nomux_buf[row][end].ch == 0)
+               && nomux_buf[row][end].attr == 0
+               && (nomux_buf[row][end].fg == 7 || nomux_buf[row][end].fg == 0))
+            end--;
+        int in_dec = 0;
+        for (col = 0; col <= end; col++) {
+            nomux_cell *c = &nomux_buf[row][col];
+            char ch = c->ch ? c->ch : ' ';
+            int fg = c->fg ? c->fg : 7;
+            unsigned int xfg = c->xfg;
+            int at = c->attr;
+            /* Emit incremental SGR changes */
+            if (at != cur_attr) {
+                /* Handle attr changes individually */
+                if ((at & 1) && !(cur_attr & 1)) p += sprintf(p, "\033[7m");
+                if (!(at & 1) && (cur_attr & 1)) p += sprintf(p, "\033[27m");
+                if ((at & 2) && !(cur_attr & 2)) p += sprintf(p, "\033[1m");
+                if (!(at & 2) && (cur_attr & 2)) p += sprintf(p, "\033[22m");
+                if ((at & 4) && !(cur_attr & 4)) p += sprintf(p, "\033[4m");
+                if (!(at & 4) && (cur_attr & 4)) p += sprintf(p, "\033[24m");
+                cur_attr = at;
+            }
+            /* An exact colour supersedes the basic index for this cell.
+               Emit the same SGR the terminal received (38;5;N); leaving
+               cur_fg alone makes the next basic-coloured cell re-emit. */
+            if (xfg != cur_xfg) {
+                if (xfg) {
+                    p += sprintf(p, "\033[38;5;%um", xfg - 1);
+                } else {
+                    p += sprintf(p, "\033[39m");
+                    cur_fg = 7;
+                }
+                cur_xfg = xfg;
+            }
+            if (!xfg && fg != cur_fg) {
+                if (fg == 7) {
+                    p += sprintf(p, "\033[39m"); /* reset fg to default */
+                } else {
+                    p += sprintf(p, "\033[%dm", nomux_sgr_fg(fg));
+                }
+                cur_fg = fg;
+            }
+            if (c->decgfx && !in_dec) { *p++ = '\016'; in_dec = 1; }
+            else if (!c->decgfx && in_dec) { *p++ = '\017'; in_dec = 0; }
+            if (c->cp) {
+                /* UTF-8 encode; one cell, one column, however many bytes. */
+                unsigned int cp = c->cp;
+                if (cp < 0x80) {
+                    *p++ = (char) cp;
+                } else if (cp < 0x800) {
+                    *p++ = (char) (0xC0 | (cp >> 6));
+                    *p++ = (char) (0x80 | (cp & 0x3F));
+                } else if (cp < 0x10000) {
+                    *p++ = (char) (0xE0 | (cp >> 12));
+                    *p++ = (char) (0x80 | ((cp >> 6) & 0x3F));
+                    *p++ = (char) (0x80 | (cp & 0x3F));
+                } else {
+                    *p++ = (char) (0xF0 | (cp >> 18));
+                    *p++ = (char) (0x80 | ((cp >> 12) & 0x3F));
+                    *p++ = (char) (0x80 | ((cp >> 6) & 0x3F));
+                    *p++ = (char) (0x80 | (cp & 0x3F));
+                }
+            } else {
+                *p++ = ch;
+            }
+        }
+        if (in_dec) { *p++ = '\017'; in_dec = 0; }
+        /* End-of-line: reset to defaults — match tmux format */
+        if (cur_attr && cur_fg != 7) {
+            p += sprintf(p, "\033[0m");  /* both attr+color: full reset */
+        } else if (cur_attr) {
+            p += sprintf(p, "\033[0m");  /* attr only: full reset */
+        } else if (cur_fg != 7) {
+            p += sprintf(p, "\033[39m"); /* color only: fg reset */
+            cur_fg = 7; cur_attr = 0;
+        }
+        if (row < 23) *p++ = '\n';
+    }
+    *p = '\0';
+    return nomux_out;
+}
+
+/* Raw-mode shadow tracking for tty_raw_print / tty_raw_print_bold output.
+ * The C code calls these directly via puts() and fputs(), bypassing the
+ * normal wintty rendering pipeline (no tty_putsym/tty_putstr indirection).
+ * The default end-of-game high-score panel (topten() with iflags.toptenwin
+ * == FALSE) goes through this path entirely, so without these hooks the
+ * NOMUX shadow buffer is blind to it.
+ *
+ * Raw mode is entered on the first raw_print after ttyDisplay is gone
+ * (typical post-exit_nhwindows endgame sequence) or by an explicit call
+ * to nomux_enter_raw_mode(). It uses its own row/col counters because
+ * ttyDisplay is null at this point.
+ */
+static int nomux_raw_active = 0;
+static int nomux_raw_row = 0;
+static int nomux_raw_col = 0;
+
+void nomux_enter_raw_mode(void) {
+    nomux_raw_active = 1;
+    nomux_raw_row = 0;
+    nomux_raw_col = 0;
+    /* exit_nhwindows / settty switch off alt-screen, so the visible
+     * terminal returns to a blank main-screen state before the high-score
+     * lines print. Mirror that by clearing the shadow. */
+    nomux_clear_screen();
+}
+
+void nomux_reset_raw_mode(void) {
+    nomux_raw_active = 0;
+    nomux_raw_row = 0;
+    nomux_raw_col = 0;
+}
+
+static void nomux_raw_putch(int ch) {
+    if (ch == '\n') {
+        nomux_raw_row++;
+        nomux_raw_col = 0;
+        return;
+    }
+    if (ch < 32) return;
+    if (nomux_raw_row >= 0 && nomux_raw_row < 24
+        && nomux_raw_col >= 0 && nomux_raw_col < 80) {
+        nomux_buf[nomux_raw_row][nomux_raw_col].ch = (char) ch;
+        nomux_buf[nomux_raw_row][nomux_raw_col].fg = nomux_fg_cur;
+        nomux_buf[nomux_raw_row][nomux_raw_col].attr = nomux_attr_cur;
+        nomux_buf[nomux_raw_row][nomux_raw_col].decgfx = nomux_decgfx_cur;
+    }
+    nomux_raw_col++;
+}
+
+/* Write a string emitted by tty_raw_print / tty_raw_print_bold to the
+ * shadow buffer, then bump SEQ so the harness re-reads the file.
+ * If raw mode is not yet active and ttyDisplay is gone, enter raw mode
+ * automatically (typical endgame path).
+ *
+ * Under NOMUX_MARKERS we have no tmux fallback, so we ALSO enter raw
+ * mode when ttyDisplay is still alive — otherwise tty_suspend_nhwindows
+ * goodbye strings ("Be seeing you...", "Saving...") and topten
+ * output via raw_print arrive before ttyDisplay is freed and would
+ * never reach the shadow buffer. The raw-print path is reserved for
+ * end-of-game / panic output, so clearing the screen here is the
+ * right behavior. */
+void nomux_raw_emit(const char *s, int bold) {
+    if (!nomux_raw_active) {
+        if (ttyDisplay && (!*s || !nomux_markers_enabled()))
+            return;  /* in-game flush, or no-marker mode → skip */
+        nomux_enter_raw_mode();
+    }
+    if (bold) nomux_attr_cur |= 2;
+    for (const char *p = s; *p; p++)
+        nomux_raw_putch((int)(unsigned char)*p);
+    nomux_raw_putch('\n');  /* puts() / tty_raw_print_bold both append a newline */
+    if (bold) nomux_attr_cur = 0;
+    /* INTENTIONALLY do NOT call nomux_capture_write_input_boundary() here.
+     *
+     * The Python harness side (run_session.py:wait_for_nomux_advance)
+     * waits for SEQ to advance past prev_seq, then reads the screen file.
+     * If raw_emit bumps SEQ on EVERY call, the harness sees SEQ advance
+     * after the FIRST emit and proceeds to read the screen — capturing
+     * INTERMEDIATE topten output (e.g. blank-only-emitted, before
+     * "You made the top ten list!" is written). This produced a
+     * non-deterministic 1-blank vs 2-blank pattern in seed0030 segs
+     * 1/2/5/7 (issue #460). Adding a tiny I/O delay here (an fopen+fclose
+     * for debug) was enough to consistently shift to 1-blank for all
+     * segments — confirming the race.
+     *
+     * Letting the next tty_nhgetch / tty_nh_poskey call's
+     * nomux_capture_write_input_boundary fire is not enough at game-end
+     * because there's no further input wait after topten — the next
+     * thing is nh_terminate(). So we add a single write at nh_terminate
+     * (see src/end.c) to capture the final state once topten has
+     * finished emitting. */
+}
+
+void nomux_raw_emit_eol(void) {
+    if (nomux_raw_active) nomux_raw_putch('\n');
+}
+
+void nomux_get_cursor(int *cx, int *cy) {
+    if (ttyDisplay) {
+        /* The terminal's cursor, not C's byte-counting curx. */
+        *cx = ttyDisplay->curx - nomux_col_debt(ttyDisplay->cury);
+        *cy = ttyDisplay->cury;
+        return;
+    }
+    if (nomux_raw_active) {
+        *cx = nomux_raw_col;
+        *cy = nomux_raw_row;
+        return;
+    }
+    *cx = 0;
+    *cy = 0;
+}
+#endif /* NOMUX_CAPTURE */
+
 void
 xputs(const char *s)
 {
@@ -660,6 +1168,10 @@ cl_end(void)
 {
     if (CE) {
         xputs(CE);
+#ifdef NOMUX_CAPTURE
+        nomux_clear_to_eol(ttyDisplay->cury,
+                           ttyDisplay->curx - nomux_col_debt(ttyDisplay->cury));
+#endif
     } else { /* no-CE fix - free after Harold Rynes */
         int cx = ttyDisplay->curx + 1;
 
@@ -684,6 +1196,9 @@ term_clear_screen(void)
         xputs(CL);
         home();
         /* set remembered data to all spaces */
+#ifdef NOMUX_CAPTURE
+        nomux_clear_screen();
+#endif
         erase_tty_screen();
     }
 }
@@ -698,20 +1213,33 @@ home(void)
     else
         tty_curs(BASE_WINDOW, 1, 0); /* using UP ... */
     ttyDisplay->curx = ttyDisplay->cury = 0;
+#ifdef NOMUX_CAPTURE
+    nomux_utf8_reset();
+#endif
 }
 
 void
 standoutbeg(void)
 {
-    if (SO)
+    if (SO) {
         xputs(SO);
+#ifdef NOMUX_CAPTURE
+        /* standout is reverse video on the recording terminal
+           (xterm-256color smso); track it like term_start_attr */
+        nomux_set_attr(ATR_INVERSE);
+#endif
+    }
 }
 
 void
 standoutend(void)
 {
-    if (SE)
+    if (SE) {
         xputs(SE);
+#ifdef NOMUX_CAPTURE
+        nomux_end_attr();
+#endif
+    }
 }
 
 #if 0 /* if you need one of these, uncomment it (here and in extern.h) */
@@ -771,6 +1299,9 @@ tty_nhbell(void)
 void
 graph_on(void)
 {
+#ifdef NOMUX_CAPTURE
+    nomux_decgfx_cur = 1;
+#endif
     if (AS)
         xputs(AS);
 }
@@ -778,6 +1309,9 @@ graph_on(void)
 void
 graph_off(void)
 {
+#ifdef NOMUX_CAPTURE
+    nomux_decgfx_cur = 0;
+#endif
     if (AE)
         xputs(AE);
 }
@@ -804,8 +1338,22 @@ tty_delay_output(void)
 #if defined(MICRO)
     int i;
 #endif
-    if (iflags.debug_fuzzer)
+    /* Under NOMUX_MARKERS the harness skips the delay and captures the
+       frame instead, so animations are recorded rather than slept. */
+    if (nomux_markers_enabled() || iflags.debug_fuzzer) {
+        (void) fflush(stdout);
+#ifdef NOMUX_CAPTURE
+        /* Capture the current screen at this animation boundary.
+           This lets the session recorder see intermediate display
+           states (zap beams, thrown objects, explosions) that would
+           otherwise be invisible because the delay is suppressed.
+           nomux_capture_write_screen appends an `anim` marker and
+           bumps nomux_anim_id, which we include in the event marker
+           so the appendix entry can be cross-referenced. */
+        nomux_capture_write_screen();
+#endif
         return;
+    }
 #ifdef TIMED_DELAY
     if (flags.nap) {
         (void) fflush(stdout);
@@ -851,6 +1399,9 @@ cl_eos(void) /* free after Robert Viduya */
 {
     if (nh_CD) {
         xputs(nh_CD);
+#ifdef NOMUX_CAPTURE
+        { int r; nomux_clear_to_eol(ttyDisplay->cury, ttyDisplay->curx - nomux_col_debt(ttyDisplay->cury)); for (r = ttyDisplay->cury + 1; r < 24; r++) nomux_clear_to_eol(r, 0); }
+#endif
     } else {
         int cy = ttyDisplay->cury + 1;
 
@@ -1466,6 +2017,9 @@ void
 term_start_attr(int attr)
 {
     if (attr) {
+#ifdef NOMUX_CAPTURE
+        nomux_set_attr(attr);
+#endif
         const char *astr = s_atr2str(attr);
 
         if (astr && *astr)
@@ -1477,6 +2031,9 @@ void
 term_end_attr(int attr)
 {
     if (attr) {
+#ifdef NOMUX_CAPTURE
+        nomux_end_attr();
+#endif
         const char *astr = e_atr2str(attr);
 
         if (astr && *astr)
@@ -1509,11 +2066,18 @@ void
 term_end_color(void)
 {
     xputs(nh_HE);
+#ifdef NOMUX_CAPTURE
+    nomux_end_fg();
+    nomux_end_attr();
+#endif
 }
 
 void
 term_start_color(int color)
 {
+#ifdef NOMUX_CAPTURE
+    nomux_set_fg(color);
+#endif
     if (color == NO_COLOR)
         xputs(nh_HE); /* inline term_end_color() */
     else if (color < CLR_MAX && hilites[color] && *hilites[color])
@@ -1617,6 +2181,10 @@ term_start_extracolor(uint32 customcolor, uint16 color256idx)
 {
     /* color 0 has bit 0x1000000 set */
     long mcolor = (customcolor & 0xFFFFFF);
+#ifdef NOMUX_CAPTURE
+    /* Record before emitting: these writers bypass nomux_putch by design. */
+    nomux_set_extracolor((unsigned int) color256idx);
+#endif
     if (iflags.colorcount == 256)
         emit256(color256idx);
     else
@@ -1626,6 +2194,9 @@ term_start_extracolor(uint32 customcolor, uint16 color256idx)
 void
 term_end_extracolor(void)
 {
+#ifdef NOMUX_CAPTURE
+        nomux_end_extracolor();
+#endif
         xputs("\033[0m");
 }
 #endif /* TTY_GRAPHICS && !NO_TERMS  */

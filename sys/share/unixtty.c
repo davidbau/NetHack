@@ -198,8 +198,11 @@ speednum(speed_t speed)
 static void
 setctty(void)
 {
-    if (STTY(&curttyb) < 0 || STTY2(&curttyb2) < 0)
+    if (STTY(&curttyb) < 0 || STTY2(&curttyb2) < 0) {
+        /* Silent when running under NOMUX_MARKERS (no controlling tty). */
+        if (!nomux_markers_enabled())
         perror("NetHack (setctty)");
+    }
 }
 
 /*
@@ -210,8 +213,19 @@ setctty(void)
 void
 gettty(void)
 {
-    if (GTTY(&inittyb) < 0 || GTTY2(&inittyb2) < 0)
+    if (GTTY(&inittyb) < 0 || GTTY2(&inittyb2) < 0) {
+        if (!nomux_markers_enabled())
         perror("NetHack (gettty)");
+    }
+    if (nomux_markers_enabled()) {
+        /* Without a real tty the GTTY ioctls leave inittyb zeroed.
+         * Synthesize the conventional terminal control characters so
+         * getline.c sees the same erase_char/kill_char as a recording
+         * captured under tmux: \177 (DEL) for erase, ^U for kill. */
+        inittyb.erase_sym = '\177';
+        inittyb.kill_sym  = '\025';
+        inittyb2.intr_sym = '\003';
+    }
     curttyb = inittyb;
     curttyb2 = inittyb2;
     ospeed = OSPEED(inittyb);
@@ -238,8 +252,10 @@ settty(const char *s)
 #endif
     if (s)
         raw_print(s);
-    if (STTY(&inittyb) < 0 || STTY2(&inittyb2) < 0)
+    if (STTY(&inittyb) < 0 || STTY2(&inittyb2) < 0) {
+        if (!nomux_markers_enabled())
         perror("NetHack (settty)");
+    }
     iflags.echo = (inittyb.echoflgs & ECHO) ? ON : OFF;
     iflags.cbreak = (CBRKON(inittyb.cbrkflgs & CBRKMASK)) ? ON : OFF;
     curttyb.inputflags |= STRIPHI;

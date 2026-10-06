@@ -344,6 +344,16 @@ topl_putsym(char c)
 #ifndef WIN32CON
     (void) putchar(c);
 #endif
+#ifdef NOMUX_CAPTURE
+    /* On non-WIN32CON, curx is incremented BEFORE putchar (see the default
+       arm of the switch above), so curx is one ahead of where the character
+       was actually written; pass curx - 1 as the column C wrote at.
+       Under a UTF8 symset nomux_putch also reassembles the raw UTF-8 bytes
+       this function is fed into single cells and tracks how far C's
+       byte-counting curx has run ahead of the terminal -- see the debt
+       comment in termcap.c. */
+    { int svx = ttyDisplay->curx; ttyDisplay->curx--; nomux_putch(c); ttyDisplay->curx = svx; }
+#endif
 }
 
 void

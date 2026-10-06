@@ -118,7 +118,7 @@ getlock(void)
      */
     /* added check for window-system type -dlc */
     if (!strcmp(windowprocs.name, "tty"))
-        if (!isatty(0))
+        if (!isatty(0) && !nomux_markers_enabled())
             error("You must play from a terminal.");
 #endif
 
@@ -382,6 +382,10 @@ child(int wt)
 #ifdef CHDIR
         const char *home = getenv("HOME");
 #endif
+        {   /* NOMUX_CAPTURE: the child must not emit capture frames */
+            extern int nomux_in_child;
+            nomux_in_child = 1;
+        }
         (void) setgid(getgid());
         (void) setuid(getuid());
 #ifdef CHDIR

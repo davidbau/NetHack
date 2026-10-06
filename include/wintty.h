@@ -5,6 +5,50 @@
 #ifndef WINTTY_H
 #define WINTTY_H
 
+/* NOMUX_CAPTURE: shadow frame buffer for direct screen capture without tmux */
+#ifndef NOMUX_CAPTURE
+#define NOMUX_CAPTURE
+#endif
+#ifdef NOMUX_CAPTURE
+/* `ch` stays a BYTE: IBMgraphics and DECgraphics put high-bit CP437/VT100
+   bytes through nomux_putch and the recorded frame must keep them verbatim.
+   `cp` is the Unicode escape hatch for ENHANCED_SYMBOLS (Enhanced1/Enhanced2,
+   `Handling: UTF8`): when non-zero the cell holds a codepoint that the
+   serializer emits as UTF-8, and `ch` is only a placeholder.  Before this,
+   g_pututf8() wrote its bytes with a bare putchar() and never reached the
+   shadow buffer at all, so every recorded Enhanced1 frame was missing its
+   glyphs entirely -- the capture could not represent them.  See #1654. */
+typedef struct { char ch; unsigned int cp; unsigned char fg; unsigned int xfg; unsigned char attr; unsigned char decgfx; } nomux_cell;
+extern nomux_cell nomux_buf[24][80];
+extern void nomux_clear_screen(void);
+extern void nomux_clear_to_eol(int row, int col);
+extern void nomux_capture_write_screen(void);
+extern void nomux_capture_write_input_boundary(void);
+extern int nomux_anim_id;
+extern void nomux_putch(int ch);
+/* Record one Unicode codepoint in the cell at the current cursor. */
+extern void nomux_putcp(unsigned int cp);
+extern void nomux_utf8_reset(void);
+extern void nomux_end_extracolor(void);
+extern int nomux_col_debt(int row);
+/* Extended (256-colour) foreground.  `fg` only holds a CLR_* index, and
+   term_start_extracolor() writes its escape with a bare xputs() that never
+   reaches nomux -- so an Enhanced symset's exact colours (Mines 190-126-0,
+   Knox 126-230-230) were rendered to the terminal and lost from the capture.
+   Stored as index+1 so 0 still means "none"; colour 0 is a legal index. */
+extern void nomux_set_extracolor(unsigned int idx256);
+extern void nomux_set_attr(int attr);
+extern void nomux_end_attr(void);
+extern void nomux_set_fg(int color);
+extern void nomux_end_fg(void);
+extern char *nomux_capture_screen(void);
+extern void nomux_get_cursor(int *cx, int *cy);
+extern void nomux_enter_raw_mode(void);
+extern void nomux_reset_raw_mode(void);
+extern void nomux_raw_emit(const char *s, int bold);
+extern void nomux_raw_emit_eol(void);
+#endif
+
 #ifndef WINDOW_STRUCTS
 #define WINDOW_STRUCTS
 

@@ -114,9 +114,12 @@
  */
 /* #define TIMED_DELAY */ /* usleep() */
 #endif
-#if defined(MACOS) && !defined(TIMED_DELAY)
+#if defined(MACOS) && !defined(TIMED_DELAY) && !defined(NO_TIMED_DELAY)
 #define TIMED_DELAY
 #endif
+/* Teleport harness: NOMUX_MARKERS drives the game through a pipe and
+   captures its screens (win/tty/termcap.c). */
+extern int nomux_markers_enabled(void);
 
 /*
  * At start of game, if there are lock and level files for current

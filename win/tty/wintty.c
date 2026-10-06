@@ -765,6 +765,26 @@ tty_askname(void)
                     (void) putchar(' ');
                     (void) putchar('\b');
 #endif
+#ifdef NOMUX_CAPTURE
+                    /* Mirror the visible erase into the NOMUX shadow
+                     * buffer. The \b/space/\b sequence emitted above
+                     * via putchar() bypasses nomux_putch (which
+                     * ignores ch < 32). On UNIX, ttyDisplay->curx
+                     * wasn't touched by the bare putchar() calls; on
+                     * WIN32CON it was already decremented above.
+                     * After this block, curx points at the erased
+                     * column and the shadow buffer cell at that
+                     * column holds a space — mirroring the real
+                     * terminal. Without this, screen captures show
+                     * the pre-erase char and subsequent typed chars
+                     * land at the wrong column for the rest of the
+                     * prompt. */
+#ifndef WIN32CON
+                    if (ttyDisplay->curx > 0)
+                        ttyDisplay->curx--;
+#endif
+                    nomux_putch(' ');
+#endif
                 }
                 continue;
             }
@@ -787,6 +807,10 @@ tty_askname(void)
                     msmsg("%c", c);
 #else
                 (void) putchar(c);
+#endif
+#ifdef NOMUX_CAPTURE
+                nomux_putch(c);
+                ttyDisplay->curx++;
 #endif
                 svp.plname[ct++] = c;
 #ifdef WIN32CON
@@ -817,7 +841,10 @@ getret(void)
 #if defined(MICRO) || defined(WIN32CON)
     getreturn("to continue");
 #else
-    if (!isatty(STDIN_FILENO) || program_state.early_options)
+    /* NOMUX_CAPTURE: the harness drives the game through a pipe, so keep
+       the prompt that a player at a terminal gets */
+    if ((!isatty(STDIN_FILENO) && !nomux_markers_enabled())
+        || program_state.early_options)
         return;
     HUPSKIP();
     xputs("\n");
@@ -865,6 +892,13 @@ tty_exit_nhwindows(const char *str)
     winid i;
 
     tty_suspend_nhwindows(str);
+#ifdef NOMUX_CAPTURE
+    /* Raw output during suspend belongs to the teardown message stream.
+     * Do not let its shadow row counter leak into later post-window raw
+     * output such as topten.  The next raw_print will enter raw mode and
+     * clear the shadow at that actual terminal boundary. */
+    nomux_reset_raw_mode();
+#endif
     /*
      * Disable windows to avoid calls to window routines.
      */
@@ -1217,6 +1251,9 @@ dmore(
     if (flags.standout)
         standoutbeg();
     xputs(prompt);
+#ifdef NOMUX_CAPTURE
+    { int save_cx = ttyDisplay->curx; const char *np; for (np = prompt; *np; np++) { nomux_putch(*np); ttyDisplay->curx++; } ttyDisplay->curx = save_cx; }
+#endif
     ttyDisplay->curx += strlen(prompt);
     if (flags.standout)
         standoutend();
@@ -1240,6 +1277,9 @@ set_item_state(
     if (item->color != NO_COLOR)
         term_start_color(item->color);
     (void) putchar(ch);
+#ifdef NOMUX_CAPTURE
+    nomux_putch(ch);
+#endif
     ttyDisplay->curx++;
     if (item->color != NO_COLOR)
         term_end_color();
@@ -1521,6 +1561,9 @@ process_menu_window(winid window, struct WinDesc *cw)
                         if (n == 2 && curr->identifier.a_void != 0
                             && curr->selected) {
                             char c = (curr->count == -1L) ? '*' : '#';
+#ifdef NOMUX_CAPTURE
+                            { int svx = ttyDisplay->curx; ttyDisplay->curx--; nomux_putch(c); ttyDisplay->curx = svx; }
+#endif
 
                             /* all selected: '*' vs count selected: '#' */
                             (void) putchar(c);
@@ -1533,9 +1576,15 @@ process_menu_window(winid window, struct WinDesc *cw)
                                and requires referencing the cursor location */
                             toggle_menu_attr(TRUE, gcolor, ATR_NONE);
                             (void) putchar(curr->glyphinfo.ttychar);
+#ifdef NOMUX_CAPTURE
+                            { int svx = ttyDisplay->curx; ttyDisplay->curx--; nomux_putch(curr->glyphinfo.ttychar); ttyDisplay->curx = svx; }
+#endif
                             toggle_menu_attr(FALSE, gcolor, ATR_NONE);
                         } else {
                             (void) putchar(*cp);
+#ifdef NOMUX_CAPTURE
+                            { int svx = ttyDisplay->curx; ttyDisplay->curx--; nomux_putch(*cp); ttyDisplay->curx = svx; }
+#endif
                         }
                     } /* for *cp */
                     if (n > attr_n && (color != NO_COLOR || attr != ATR_NONE))
@@ -1855,6 +1904,9 @@ process_text_window(winid window, struct WinDesc *cw)
             attr = cw->data[i][0] - 1;
             if (cw->offx) {
                 (void) putchar(' ');
+#ifdef NOMUX_CAPTURE
+                nomux_putch(' ');
+#endif
                 ++ttyDisplay->curx;
             }
             term_start_attr(attr);
@@ -1872,16 +1924,35 @@ process_text_window(winid window, struct WinDesc *cw)
                 if (linestart) {
                     if (SYMHANDLING(H_UTF8)) {
                         /* FIXME: what is actually in that line? is it the \GNNNNNNNN or UTF-8? */
+#ifdef NOMUX_CAPTURE
+                        /* Same curx compensation the plain branch below does:
+                           the loop already advanced curx in its condition, so
+                           capturing at the current value records the char one
+                           column right, where the NEXT char promptly
+                           overwrites it -- the line's first character
+                           vanished from every recorded UTF8 frame.  g_putch
+                           reaches nomux_putch internally, so the correction
+                           has to wrap the call. */
+                        { int svx = ttyDisplay->curx; ttyDisplay->curx--;
+                          g_putch(*cp); ttyDisplay->curx = svx; }
+#else
                         g_putch(*cp);
+#endif
                     } else if ((*cp & 0x80) != 0) {
                         g_putch(*cp);
                         end_glyphout();
                     } else {
                         (void) putchar(*cp);
+#ifdef NOMUX_CAPTURE
+                        { int svx = ttyDisplay->curx; ttyDisplay->curx--; nomux_putch(*cp); ttyDisplay->curx = svx; }
+#endif
                     }
                     linestart = FALSE;
                 } else {
                     (void) putchar(*cp);
+#ifdef NOMUX_CAPTURE
+                    { int svx = ttyDisplay->curx; ttyDisplay->curx--; nomux_putch(*cp); ttyDisplay->curx = svx; }
+#endif
                 }
             }
             term_end_attr(attr);
@@ -2178,6 +2249,14 @@ tty_curs(
 
     if (y == cy && x == cx)
         return;
+#ifdef NOMUX_CAPTURE
+    /* Everything below this point repositions the terminal, so C's curx and
+       the real cursor agree again and any UTF-8 column debt on the old row is
+       settled.  The early return above deliberately does NOT reset: it emits
+       nothing, and addtopl()'s no-op tty_curs relies on the debt surviving so
+       concatenated text lands right after the glyph. */
+    nomux_utf8_reset();
+#endif
 
     if (cw->type == NHW_MAP)
         end_glyphout();
@@ -2233,6 +2312,9 @@ tty_putsym(winid window, int x, int y, char ch)
     case NHW_BASE:
         tty_curs(window, x, y);
         (void) putchar(ch);
+#ifdef NOMUX_CAPTURE
+        nomux_putch(ch);
+#endif
         ttyDisplay->curx++;
         cw->curx++;
         break;
@@ -2391,6 +2473,9 @@ tty_putstr(winid window, int attr, const char *str)
         term_start_attr(attr);
         while (*str && (int) ttyDisplay->curx < (int) ttyDisplay->cols - 1) {
             (void) putchar(*str);
+#ifdef NOMUX_CAPTURE
+            nomux_putch(*str);
+#endif
             str++;
             ttyDisplay->curx++;
         }
@@ -2408,6 +2493,9 @@ tty_putstr(winid window, int attr, const char *str)
                 tty_curs(window, cw->curx + 1, cw->cury);
             }
             (void) putchar(*str);
+#ifdef NOMUX_CAPTURE
+            nomux_putch(*str);
+#endif
             str++;
             ttyDisplay->curx++;
         }
@@ -3839,6 +3927,31 @@ g_putch(int in_ch)
     console_g_putch(in_ch);
     nhUse(ch);
 #endif /* WIN32CON */
+#ifdef NOMUX_CAPTURE
+    /* Record into the NOMUX shadow the exact byte written to the terminal
+       above so captured frames match real terminal bytes:
+         - UTF-8 / IBMgraphics / 8-bit-tty : putchar(ch) emitted the raw
+           (possibly high-bit CP437) byte -> store it intact.
+         - DECgraphics line drawing        : putchar(ch ^ 0x80) emitted the
+           7-bit form inside SO/SI; graph_on() already set nomux_decgfx_cur,
+           so store the 7-bit form and let the decgfx flag re-add SO/SI.
+       The old code stripped the high bit unconditionally, aliasing
+       IBMgraphics high-bit box-drawing bytes (0xB3 -> 0x33) in the recorded
+       frame even though JS renders the correct 8-bit CP437 output. */
+#if defined(ASCIIGRAPH) && !defined(WIN32CON)
+    if (!SYMHANDLING(H_UTF8)
+        && !SYMHANDLING(H_IBM)
+        && !(iflags.eight_bit_tty
+             && (!SYMHANDLING(H_DEC) || (in_ch & 0x7f) < 0x60))
+        && (ch & 0x80)) {
+        nomux_putch((int) (unsigned char) (ch ^ 0x80));
+    } else {
+        nomux_putch((int) (unsigned char) ch);
+    }
+#else
+    nomux_putch((int) (unsigned char) ch);
+#endif
+#endif
     return;
 }
 
@@ -3848,6 +3961,30 @@ void
 g_pututf8(uint8 *utf8str)
 {
     HUPSKIP();
+    /* Record the glyph in the capture shadow buffer BEFORE writing bytes.
+       These putchar() calls bypass nomux_putch by design -- they emit a
+       multi-byte sequence for one column -- so without this the recorded
+       frame silently lost every Enhanced1/Enhanced2 glyph and replayed as
+       blank.  Decode to a codepoint and store it in the single cell the
+       terminal will render it in.  See #1654. */
+    {
+        uint8 *q = utf8str;
+        unsigned int cp = 0;
+        int n = 0;
+
+        if (*q < 0x80) {
+            cp = *q; n = 0;
+        } else if ((*q & 0xE0) == 0xC0) {
+            cp = *q & 0x1F; n = 1;
+        } else if ((*q & 0xF0) == 0xE0) {
+            cp = *q & 0x0F; n = 2;
+        } else if ((*q & 0xF8) == 0xF0) {
+            cp = *q & 0x07; n = 3;
+        }
+        while (n-- > 0 && (*++q & 0xC0) == 0x80)
+            cp = (cp << 6) | (*q & 0x3F);
+        nomux_putcp(cp);
+    }
     while (*utf8str) {
         (void) putchar(*utf8str);
         utf8str++;
@@ -4067,6 +4204,9 @@ tty_raw_print(const char *str)
     puts(str);
     (void) fflush(stdout);
 #endif
+#ifdef NOMUX_CAPTURE
+    nomux_raw_emit(str, 0);
+#endif
 }
 
 void
@@ -4091,6 +4231,9 @@ tty_raw_print_bold(const char *str)
     puts("");
     (void) fflush(stdout);
 #endif
+#ifdef NOMUX_CAPTURE
+    nomux_raw_emit(str, 1);
+#endif
 }
 
 int
@@ -4109,6 +4252,9 @@ tty_nhgetch(void)
     print_vt_code1(AVTC_INLINE_SYNC);
     term_curs_set(1);
     (void) fflush(stdout);
+#ifdef NOMUX_CAPTURE
+    nomux_capture_write_input_boundary();
+#endif
     /* Note: if raw_print() and wait_synch() get called to report terminal
      * initialization problems, then wins[] and ttyDisplay might not be
      * available yet.  Such problems will probably be fatal before we get
@@ -4182,6 +4328,9 @@ tty_nh_poskey(coordxy *x UNUSED, coordxy *y UNUSED, int *mod UNUSED)
     HUPSKIP_RESULT('\033');
 #if defined(WIN32CON)
     (void) fflush(stdout);
+#ifdef NOMUX_CAPTURE
+    nomux_capture_write_input_boundary();
+#endif
     /* Note: if raw_print() and wait_synch() get called to report terminal
      * initialization problems, then wins[] and ttyDisplay might not be
      * available yet.  Such problems will probably be fatal before we get
@@ -4878,6 +5027,9 @@ tty_putstatusfield(const char *text, int x, int y)
             n = i + x;
             if (n < ncols && *text) {
                 (void) putchar(*text);
+#ifdef NOMUX_CAPTURE
+                nomux_putch(*text);
+#endif
                 ttyDisplay->curx++;
                 cw->curx++;
                 cw->data[y][n - 1] = *text;
