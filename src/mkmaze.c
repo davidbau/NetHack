@@ -668,12 +668,17 @@ fixup_special(void)
             }
         }
 
-        if (rn2(2))
-            otmp = mk_tt_object(STATUE, somex(croom), somey(croom));
-        else /* Medusa statues don't contain books */
+        if (rn2(2)) {
+            int sx = somex(croom); /* [parity] sequence somex before somey; */
+            int sy = somey(croom); /* Clang arg-eval order is platform-       */
+            otmp = mk_tt_object(STATUE, sx, sy); /* dependent (issue #1052)    */
+        } else { /* Medusa statues don't contain books */
+            int sx = somex(croom);
+            int sy = somey(croom);
             otmp =
                 mkcorpstat(STATUE, (struct monst *) 0, (struct permonst *) 0,
-                           somex(croom), somey(croom), CORPSTAT_NONE);
+                           sx, sy, CORPSTAT_NONE);
+        }
         if (otmp) {
             tryct = 0;
             while (++tryct < 100
@@ -1501,7 +1506,8 @@ fumaroles(void)
         coordxy y = rn1(ROWNO - 4, 3);
 
         if (levl[x][y].typ == LAVAPOOL) {
-            NhRegion *r = create_gas_cloud(x, y, rn1(10, sizemin), rn1(10, 5));
+            int gc1 = rn1(10, sizemin), gc2 = rn1(10, 5); /* [parity] #1052 */
+            NhRegion *r = create_gas_cloud(x, y, gc1, gc2);
 
             clear_heros_fault(r);
             snd = TRUE;

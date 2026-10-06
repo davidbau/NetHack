@@ -1520,7 +1520,11 @@ trapeffect_bear_trap(
             if (wearing_iron_shoes(mtmp))
                 pline("%s protects your leg.", Yname2(uarmf));
             else {
-                set_wounded_legs(rn2(2) ? RIGHT_SIDE : LEFT_SIDE, rn1(10, 10));
+                {
+                    long wlside = rn2(2) ? RIGHT_SIDE : LEFT_SIDE; /* [parity] */
+                    int wldur = rn1(10, 10);                       /* seq #1052 */
+                    set_wounded_legs(wlside, wldur);
+                }
                 losehp(Maybe_Half_Phys(dmg), "bear trap", KILLED_BY_AN);
             }
         }

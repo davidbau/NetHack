@@ -1934,9 +1934,12 @@ eatcorpse(struct obj *otmp)
         tp++;
         pline("Ecch - that must have been poisonous!");
         if (!Poison_resistance) {
-            poison_strdmg(rnd(4), rnd(15),
-                          !glob ? "poisonous corpse" : "poisonous glob",
-                          KILLED_BY_AN);
+            {
+                int pdmg = rnd(4), pblood = rnd(15); /* [parity] seq rng #1052 */
+                poison_strdmg(pdmg, pblood,
+                              !glob ? "poisonous corpse" : "poisonous glob",
+                              KILLED_BY_AN);
+            }
         } else
             You("seem unaffected by the poison.");
 
@@ -2181,7 +2184,10 @@ fprefx(struct obj *otmp)
         } else if (otmp->otyp == APPLE && otmp->cursed && !Sleep_resistance) {
             ; /* skip core joke; feedback deferred til fpostfx() */
 
-#if defined(MAC68K) || defined(MACOS)
+/* teleport (issue #761): standardize the apple joke on the UNIX "Core
+   dumped." variant on every build host, so Mac- and Linux-recorded
+   ground-truth sessions are identical.  Was: defined(MAC68K)||defined(MACOS) */
+#if 0
         /* KMH -- Why should Unix have all the fun?
            We check MACOS before UNIX to get the Apple-specific apple
            message; the '#if UNIX' code will still kick in for pear. */
@@ -2800,7 +2806,10 @@ doeat_nonfood(struct obj *otmp)
     if (otmp->oclass == WEAPON_CLASS && otmp->opoisoned) {
         pline("Ecch - that must have been poisonous!");
         if (!Poison_resistance) {
-            poison_strdmg(rnd(4), rnd(15), xname(otmp), KILLED_BY_AN);
+            {
+                int pdmg = rnd(4), pblood = rnd(15); /* [parity] seq rng #1052 */
+                poison_strdmg(pdmg, pblood, xname(otmp), KILLED_BY_AN);
+            }
         } else
             You("seem unaffected by the poison.");
     } else if (!nodelicious) {

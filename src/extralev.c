@@ -236,7 +236,10 @@ makeroguerooms(void)
             }
             here.doortable = 0;
         }
-    miniwalk(rn2(3), rn2(3));
+    {
+        int mwx = rn2(3), mwy = rn2(3); /* [parity] sequence rng args #1052 */
+        miniwalk(mwx, mwy);
+    }
     svn.nroom = 0;
     for (y = 0; y < 3; y++)
         for (x = 0; x < 3; x++) {

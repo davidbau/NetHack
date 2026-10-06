@@ -67,7 +67,10 @@ throne_sit_effect(void)
 
         switch (effect) {
         case 1:
-            (void) adjattrib(rn2(A_MAX), -rn1(4, 3), FALSE);
+            {
+                int aidx = rn2(A_MAX), aamt = -rn1(4, 3); /* [parity] #1052 */
+                (void) adjattrib(aidx, aamt, FALSE);
+            }
             losehp(rnd(10), "cursed throne", KILLED_BY_AN);
             break;
         case 2:

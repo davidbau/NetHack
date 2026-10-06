@@ -760,8 +760,11 @@ m_initinv(struct monst *mtmp)
         if (ptr == &mons[PM_MASTER_LICH] && !rn2(13))
             (void) mongets(mtmp, (rn2(7) ? ATHAME : WAN_NOTHING));
         else if (ptr == &mons[PM_ARCH_LICH] && !rn2(3)) {
-            otmp = mksobj(rn2(3) ? ATHAME : QUARTERSTAFF, TRUE,
-                          rn2(13) ? FALSE : TRUE);
+            {
+                int mtyp = rn2(3) ? ATHAME : QUARTERSTAFF; /* [parity] #1052 */
+                boolean mbless = rn2(13) ? FALSE : TRUE;
+                otmp = mksobj(mtyp, TRUE, mbless);
+            }
             if (otmp->spe < 2)
                 otmp->spe = rnd(3);
             if (!rn2(4))

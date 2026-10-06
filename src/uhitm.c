@@ -5269,7 +5269,7 @@ mhitm_knockback(
 {
     char magrbuf[BUFSZ], mdefbuf[BUFSZ];
     struct obj *otmp;
-    const char *knockedhow;
+    const char *knockedhow, *knockforce, *knocknoun;
     coordxy dx, dy, defx, defy;
     int knockdistance = rn2(3) ? 1 : 2; /* 67%: 1 step, 33%: 2 steps */
     int chance = 6; /* 1/6 chance of attack knocking back a monster */
@@ -5385,9 +5385,12 @@ mhitm_knockback(
          * mhitu: The red dragon knocks you back with a forceful blow!
          * mhitm: The fire giant knocks the gnome back with a forceful strike!
          */
+        knockforce = rn2(2) ? "forceful" : "powerful";
+        knocknoun = rn2(2) ? "blow" : "strike";
+        /* [parity] pin source-order rn2 args; C arg order is unspecified. */
         pline("%s %s %s %s with a %s %s!",
               magrbuf, vtense(magrbuf, "knock"), mdefbuf, knockedhow,
-              rn2(2) ? "forceful" : "powerful", rn2(2) ? "blow" : "strike");
+              knockforce, knocknoun);
     } else if (u_agr) {
         /* hero knocks unseen foe back; noticed by touch */
         You_feel("%s be knocked %s!", some_mon_nam(mdef), knockedhow);
@@ -6047,9 +6050,12 @@ passive(
                         /* [it's the hero who should be getting paralyzed
                            and isn't; this message describes the monster's
                            reaction rather than the hero's escape] */
-                        pline("%s looks %s%s.", Monnam(mon),
-                              !rn2(2) ? "" : "rather ",
-                              !rn2(2) ? "numb" : "stupefied");
+                        {
+                            const char *s1 = !rn2(2) ? "" : "rather "; /* seq */
+                            const char *s2 = !rn2(2) ? "numb" : "stupefied";
+                            /* [parity] sequence rng flavor args (issue #1052) */
+                            pline("%s looks %s%s.", Monnam(mon), s1, s2);
+                        }
                     } else if (Free_action) {
                         You("momentarily stiffen under %s gaze!",
                             s_suffix(mon_nam(mon)));

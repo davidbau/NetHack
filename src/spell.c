@@ -161,9 +161,12 @@ cursed_book(struct obj *bp)
         /* temp disable in_use; death should not destroy the book */
         was_in_use = bp->in_use;
         bp->in_use = FALSE;
-        poison_strdmg(Poison_resistance ? rn1(2, 1) : rn1(4, 3),
-                      rnd(Poison_resistance ? 6 : 10),
-                      "contact-poisoned spellbook", KILLED_BY_AN);
+        {
+            int pdmg = Poison_resistance ? rn1(2, 1) : rn1(4, 3); /* [parity] */
+            int pextra = rnd(Poison_resistance ? 6 : 10);        /* seq #1052 */
+            poison_strdmg(pdmg, pextra,
+                          "contact-poisoned spellbook", KILLED_BY_AN);
+        }
         bp->in_use = was_in_use;
         break;
     case 6:

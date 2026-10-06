@@ -189,6 +189,10 @@ typedef uchar nhsym;
 #endif
 
 /* Displayable name of this port; don't redefine if defined in *conf.h */
+/* teleport (issue #761): pin a host-independent port name so the version
+   banner and help text are byte-identical on every build host.  The
+   #ifndef PORT_ID block below then skips the per-OS names entirely. */
+#define PORT_ID "Teleport"
 #ifndef PORT_ID
 #ifdef AMIGA
 #define PORT_ID "Amiga"
