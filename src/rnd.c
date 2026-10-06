@@ -2,7 +2,142 @@
 /*      Copyright (c) 2004 by Robert Patrick Rankin               */
 /* NetHack may be freely redistributed.  See license for details. */
 
+/* Suppress rng logging macros inside this file -- we define the real
+   functions here, and add logging directly in each function body.
+   Internal calls (e.g. rnz calling rn2) inherit the outer caller's
+   context because the macros don't fire inside rnd.c. */
+#define RNGLOG_IN_RND_C
 #include "hack.h"
+
+/*
+ * PRNG call logging infrastructure.
+ * When NETHACK_RNGLOG is set, every rn2/rnd/rnl/d/rne/rnz call is logged
+ * with: call#, function(args) = result @ caller_func(file:line)
+ *
+ * The caller_func, file:line come from rng_log_set_caller(), invoked
+ * by the macros in hack.h before calling the real function.
+ *
+ * Caller context propagation: the context is NOT cleared after logging.
+ * This means internal rn2 calls from wrapper functions (rnz, rne, rnl)
+ * inherit the ORIGINAL caller's file:line annotation.  For example,
+ * if start_corpse_timeout at mkobj.c:1409 calls rnz(25), the internal
+ * rn2(1000), rn2(4), rn2(2) calls all log with "@ mkobj.c:1409".
+ * The wrapper result (rnz, rne, rnl) also logs with the same annotation.
+ *
+ * Context is overwritten by the next macro expansion (each external call
+ * sets fresh context), so there is no stale-context problem.
+ */
+static FILE *rng_logfile = NULL;
+static int rng_call_count = 0;
+static const char *rng_caller_file = NULL;
+static int rng_caller_line = 0;
+static const char *rng_caller_func = NULL;
+/* NETHACK_TRACE=<channel>[,<channel>...]: the debug channels that write
+   ^dbg.<channel> lines into the log (#1724).  PES ignores every ^dbg. line,
+   so turning a channel on never changes parity. */
+static const char *trace_mask = (const char *) 0;
+
+void
+rng_log_init(void)
+{
+    const char *logpath = harness_getenv("NETHACK_RNGLOG");
+
+    if (logpath) {
+        rng_logfile = fopen(logpath, "w");
+        if (rng_logfile)
+            setvbuf(rng_logfile, NULL, _IOLBF, 0); /* line-buffered */
+    }
+    trace_mask = harness_getenv("NETHACK_TRACE");
+}
+
+/* Is debug channel `channel` listed in NETHACK_TRACE?  Channels are
+   separated by commas.  Nothing is on without a log to write to. */
+boolean
+harness_trace_on(const char *channel)
+{
+    const char *p;
+    size_t len;
+
+    if (!trace_mask || !rng_logfile)
+        return FALSE;
+    len = strlen(channel);
+    for (p = trace_mask; (p = strstr(p, channel)) != 0; p += len) {
+        if ((p == trace_mask || p[-1] == ',')
+            && (p[len] == '\0' || p[len] == ','))
+            return TRUE;
+    }
+    return FALSE;
+}
+
+/* Write one debug line, ^dbg.<channel><fmt>, when the channel is on.
+   Callers start fmt with "[" for a plain line or ".<event>[" for one of
+   several event kinds on a channel. */
+void
+dbg_log(const char *channel, const char *fmt, ...)
+{
+    va_list ap;
+
+    if (!harness_trace_on(channel))
+        return;
+    fprintf(rng_logfile, "^dbg.%s", channel);
+    va_start(ap, fmt);
+    vfprintf(rng_logfile, fmt, ap);
+    va_end(ap);
+    fputc('\n', rng_logfile);
+}
+
+boolean
+rng_log_enabled(void)
+{
+    return rng_logfile ? TRUE : FALSE;
+}
+
+void
+rng_log_set_caller(const char *file, int line, const char *func)
+{
+    rng_caller_file = file;
+    rng_caller_line = line;
+    rng_caller_func = func;
+}
+
+long
+rng_log_get_position(void)
+{
+    if (!rng_logfile)
+        return -1L;
+    (void) fflush(rng_logfile);
+    return ftell(rng_logfile);
+}
+
+int
+rng_log_get_call_count(void)
+{
+    return rng_call_count;
+}
+
+static void
+rng_log_write(const char *func, const char *args, int result)
+{
+    if (!rng_logfile)
+        return;
+    rng_call_count++;
+    if (rng_caller_file) {
+        if (rng_caller_func) {
+            fprintf(rng_logfile, "%d %s(%s) = %d @ %s(%s:%d)\n",
+                    rng_call_count, func, args, result,
+                    rng_caller_func, rng_caller_file, rng_caller_line);
+        } else {
+            fprintf(rng_logfile, "%d %s(%s) = %d @ %s:%d\n",
+                    rng_call_count, func, args, result,
+                    rng_caller_file, rng_caller_line);
+        }
+        /* Do NOT clear rng_caller_file here -- let internal calls from
+           wrapper functions (rnz, rne, rnl) inherit the same context. */
+    } else {
+        fprintf(rng_logfile, "%d %s(%s) = %d\n",
+                rng_call_count, func, args, result);
+    }
+}
 
 #ifdef USE_ISAAC64
 #include "isaac64.h"
@@ -69,7 +204,24 @@ RND(int x)
 int
 rn2_on_display_rng(int x)
 {
-    return (isaac64_next_uint64(&rnglist[DISP].rng_state) % x);
+    int result = (isaac64_next_uint64(&rnglist[DISP].rng_state) % x);
+
+    /* ^dbg.disp_rng[n=N idx=R] @ caller.  A display-RNG call is not a
+       core RNG call, so it does not advance rng_call_count. */
+    if (harness_trace_on("disp_rng")) {
+        fprintf(rng_logfile, "^dbg.disp_rng[n=%d idx=%d", x, result);
+        fputc(']', rng_logfile);
+        if (rng_caller_file) {
+            if (rng_caller_func)
+                fprintf(rng_logfile, " @ %s(%s:%d)",
+                        rng_caller_func, rng_caller_file, rng_caller_line);
+            else
+                fprintf(rng_logfile, " @ %s:%d",
+                        rng_caller_file, rng_caller_line);
+        }
+        fputc('\n', rng_logfile);
+    }
+    return result;
 }
 
 #else   /* USE_ISAAC64 */
@@ -94,16 +246,20 @@ rn2_on_display_rng(int x)
 int
 rn2(int x)
 {
+    int result;
 #if (NH_DEVEL_STATUS != NH_STATUS_RELEASED)
     if (x <= 0) {
         impossible("rn2(%d) attempted", x);
         return 0;
     }
-    x = RND(x);
-    return x;
-#else
-    return RND(x);
 #endif
+    result = RND(x);
+    if (rng_logfile) {
+        char buf[32];
+        snprintf(buf, sizeof buf, "%d", x);
+        rng_log_write("rn2", buf, result);
+    }
+    return result;
 }
 
 /* 0 <= rnl(x) < x; sometimes subtracting Luck;
@@ -112,6 +268,8 @@ int
 rnl(int x)
 {
     int i, adjustment;
+    /* Internal rn2 call inherits caller context from the rnl macro --
+       no save/clear needed. */
 
 #if (NH_DEVEL_STATUS != NH_STATUS_RELEASED)
     if (x <= 0) {
@@ -147,6 +305,11 @@ rnl(int x)
         else if (i >= x)
             i = x - 1;
     }
+    if (rng_logfile) {
+        char buf[32];
+        snprintf(buf, sizeof buf, "%d", x);
+        rng_log_write("rnl", buf, i);
+    }
     return i;
 }
 
@@ -154,14 +317,20 @@ rnl(int x)
 int
 rnd(int x)
 {
+    int result;
 #if (NH_DEVEL_STATUS != NH_STATUS_RELEASED)
     if (x <= 0) {
         impossible("rnd(%d) attempted", x);
         return 1;
     }
 #endif
-    x = RND(x) + 1;
-    return x;
+    result = RND(x) + 1;
+    if (rng_logfile) {
+        char buf[32];
+        snprintf(buf, sizeof buf, "%d", x);
+        rng_log_write("rnd", buf, result);
+    }
+    return result;
 }
 
 int
@@ -175,6 +344,7 @@ int
 d(int n, int x)
 {
     int tmp = n;
+    int orig_n = n;
 
 #if (NH_DEVEL_STATUS != NH_STATUS_RELEASED)
     if (x < 0 || n < 0 || (x == 0 && n != 0)) {
@@ -184,6 +354,11 @@ d(int n, int x)
 #endif
     while (n--)
         tmp += RND(x);
+    if (rng_logfile) {
+        char buf[64];
+        snprintf(buf, sizeof buf, "%d,%d", orig_n, x);
+        rng_log_write("d", buf, tmp);
+    }
     return tmp; /* Alea iacta est. -- J.C. */
 }
 
@@ -192,11 +367,18 @@ int
 rne(int x)
 {
     int tmp, utmp;
+    /* Internal rn2 calls inherit caller context from the rne macro --
+       no save/clear needed. */
 
     utmp = (u.ulevel < 15) ? 5 : u.ulevel / 3;
     tmp = 1;
     while (tmp < utmp && !rn2(x))
         tmp++;
+    if (rng_logfile) {
+        char buf[32];
+        snprintf(buf, sizeof buf, "%d", x);
+        rng_log_write("rne", buf, tmp);
+    }
     return tmp;
 
     /* was:
@@ -215,6 +397,8 @@ rnz(int i)
 {
     long x = (long) i;
     long tmp = 1000L;
+    /* Internal rn2/rne calls inherit caller context from the rnz macro --
+       no save/clear needed. */
 
     tmp += rn2(1000);
     tmp *= rne(4);
@@ -224,6 +408,11 @@ rnz(int i)
     } else {
         x *= 1000;
         x /= tmp;
+    }
+    if (rng_logfile) {
+        char buf[32];
+        snprintf(buf, sizeof buf, "%d", i);
+        rng_log_write("rnz", buf, (int) x);
     }
     return (int) x;
 }

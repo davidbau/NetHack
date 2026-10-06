@@ -64,6 +64,7 @@ main(int argc, char *argv[])
     boolean plsel_once = FALSE;
 
     early_init(argc, argv);
+    rng_log_init();  /* 004-prng-logging: open log if NETHACK_RNGLOG is set */
 
 #if defined(__APPLE__)
     {

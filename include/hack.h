@@ -1594,6 +1594,44 @@ typedef uint32_t mmflags_nht;     /* makemon MM_ flags */
     nh_deterministic_qsort((base), (nmemb), (size), (compar))
 #endif
 
+/*
+ * PRNG call logging macros (004-prng-logging patch).
+ *
+ * These use a C preprocessor trick: function-like macros only match
+ * when followed by '('.  So `init_random(rn2)` passes the bare function
+ * pointer (no parens) and the macro doesn't fire.  But `rn2(42)` does
+ * match, setting the caller's __func__, __FILE__:__LINE__ before
+ * calling the real rn2 function.
+ *
+ * The self-reference in the expansion (e.g. rn2 calling rn2) is safe:
+ * C99 6.10.3.4 says a macro name found during its own expansion is
+ * not replaced again, so it resolves to the real function.
+ *
+ * Suppressed inside rnd.c itself (RNGLOG_IN_RND_C) so that internal
+ * calls (rnz->rn2, rne->rn2, etc) inherit the outer caller's context
+ * rather than setting their own.
+ */
+#ifndef RNGLOG_IN_RND_C
+#define rn2(x) (rng_log_enabled() \
+                ? (rng_log_set_caller(__FILE__, __LINE__, __func__), rn2(x)) \
+                : rn2(x))
+#define rnd(x) (rng_log_enabled() \
+                ? (rng_log_set_caller(__FILE__, __LINE__, __func__), rnd(x)) \
+                : rnd(x))
+#define rnl(x) (rng_log_enabled() \
+                ? (rng_log_set_caller(__FILE__, __LINE__, __func__), rnl(x)) \
+                : rnl(x))
+#define d(n,x) (rng_log_enabled() \
+                ? (rng_log_set_caller(__FILE__, __LINE__, __func__), d((n),(x))) \
+                : d((n),(x)))
+#define rne(x) (rng_log_enabled() \
+                ? (rng_log_set_caller(__FILE__, __LINE__, __func__), rne(x)) \
+                : rne(x))
+#define rnz(x) (rng_log_enabled() \
+                ? (rng_log_set_caller(__FILE__, __LINE__, __func__), rnz(x)) \
+                : rnz(x))
+#endif /* RNGLOG_IN_RND_C */
+
 #endif  /* RECOVER_C */
 
 #endif /* HACK_H */

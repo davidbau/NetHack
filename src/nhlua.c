@@ -60,6 +60,8 @@ staticfn int nhl_ing_suffix(lua_State *);
 staticfn int nhl_an(lua_State *);
 staticfn int nhl_rn2(lua_State *);
 staticfn int nhl_random(lua_State *);
+staticfn boolean nhl_lua_rnglog_ctx_enabled(void);
+staticfn void nhl_rnglog_set_lua_caller(lua_State *, const char *);
 staticfn int nhl_level_difficulty(lua_State *);
 staticfn int nhl_is_genocided(lua_State *);
 staticfn int nhl_get_debug_themerm_name(lua_State *);
@@ -916,13 +918,145 @@ nhl_an(lua_State *L)
 }
 
 /* rn2(10) */
+staticfn boolean
+nhl_lua_rnglog_ctx_enabled(void)
+{
+    /* Lua callsites are logged whenever the RNG log is. */
+    return rng_log_enabled();
+}
+
+staticfn void
+nhl_rnglog_set_lua_caller(lua_State *L, const char *fallback)
+{
+    /* Static buffers are safe here because this helper is used
+       synchronously for a single Lua->C->RNG call path and is not
+       expected to be re-entrant. */
+    static char rnglog_srcbuf[BUFSZ];
+    static char rnglog_namebuf[BUFSZ];
+    static char rnglog_name1buf[BUFSZ];
+    static char rnglog_src1buf[BUFSZ];
+    static char rnglog_src2buf[BUFSZ];
+    static char rnglog_parentbuf[BUFSZ];
+    lua_Debug ar;
+    lua_Debug ar2;
+    const char *src = rnglog_srcbuf;
+    int line = 0, line1 = 0, line2 = 0;
+    const char *name = fallback;
+    const char *name1 = fallback;
+    const char *name2 = "lua";
+    boolean have1 = FALSE, have2 = FALSE;
+
+    if (!nhl_lua_rnglog_ctx_enabled())
+        return;
+
+    Snprintf(rnglog_srcbuf, sizeof rnglog_srcbuf, "%s", "lua");
+    Snprintf(rnglog_src1buf, sizeof rnglog_src1buf, "%s", "lua");
+    Snprintf(rnglog_src2buf, sizeof rnglog_src2buf, "%s", "lua");
+
+    if (lua_getstack(L, 1, &ar) && lua_getinfo(L, "nSl", &ar)) {
+        if (ar.short_src && *ar.short_src) {
+            const char *src_start = ar.short_src;
+            size_t src_len = strlen(ar.short_src);
+
+            /* Lua string chunks render as [string "(name.lua)"].
+               Normalize to plain "name.lua" for readable RNG logs. */
+            if (src_len >= 11
+                && !strncmp(src_start, "[string \"", 9)
+                && src_start[src_len - 2] == '"'
+                && src_start[src_len - 1] == ']') {
+                src_start += 9;
+                src_len -= 11;
+            }
+            if (src_len >= 1 && src_start[0] == '@') {
+                src_start++;
+                src_len--;
+            }
+            if (src_len >= 2
+                && src_start[0] == '('
+                && src_start[src_len - 1] == ')') {
+                src_start++;
+                src_len -= 2;
+            }
+            Snprintf(rnglog_src1buf, sizeof rnglog_src1buf,
+                     "%.*s", (int) src_len, src_start);
+        }
+        line1 = ar.currentline;
+        if (ar.name && *ar.name
+            && ((ar.name[0] >= 'A' && ar.name[0] <= 'Z')
+                || (ar.name[0] >= 'a' && ar.name[0] <= 'z')
+                || ar.name[0] == '_')) {
+            Snprintf(rnglog_name1buf, sizeof rnglog_name1buf, "%s", ar.name);
+            name1 = rnglog_name1buf;
+        }
+        have1 = TRUE;
+    }
+
+    if (lua_getstack(L, 2, &ar2) && lua_getinfo(L, "nSl", &ar2)) {
+        if (ar2.short_src && *ar2.short_src) {
+            const char *src_start = ar2.short_src;
+            size_t src_len = strlen(ar2.short_src);
+
+            if (src_len >= 11
+                && !strncmp(src_start, "[string \"", 9)
+                && src_start[src_len - 2] == '"'
+                && src_start[src_len - 1] == ']') {
+                src_start += 9;
+                src_len -= 11;
+            }
+            if (src_len >= 1 && src_start[0] == '@') {
+                src_start++;
+                src_len--;
+            }
+            if (src_len >= 2
+                && src_start[0] == '('
+                && src_start[src_len - 1] == ')') {
+                src_start++;
+                src_len -= 2;
+            }
+            Snprintf(rnglog_src2buf, sizeof rnglog_src2buf,
+                     "%.*s", (int) src_len, src_start);
+        }
+        line2 = ar2.currentline;
+        if (ar2.name && *ar2.name
+            && ((ar2.name[0] >= 'A' && ar2.name[0] <= 'Z')
+                || (ar2.name[0] >= 'a' && ar2.name[0] <= 'z')
+                || ar2.name[0] == '_')) {
+            Snprintf(rnglog_parentbuf, sizeof rnglog_parentbuf, "%s", ar2.name);
+            name2 = rnglog_parentbuf;
+        }
+        have2 = TRUE;
+    }
+
+    if (have2) {
+        src = rnglog_src2buf;
+        line = line2;
+        if (have1) {
+            Snprintf(rnglog_namebuf, sizeof rnglog_namebuf,
+                     "%s src=%s:%d parent=%s",
+                     name1, rnglog_src1buf, line1, name2);
+            name = rnglog_namebuf;
+        } else {
+            name = name2;
+        }
+    } else if (have1) {
+        src = rnglog_src1buf;
+        line = line1;
+        name = name1;
+    }
+    rng_log_set_caller(src, line, name);
+}
+
+/* rn2(10) */
 staticfn int
 nhl_rn2(lua_State *L)
 {
     int argc = lua_gettop(L);
 
-    if (argc == 1)
-        lua_pushinteger(L, rn2((int) luaL_checkinteger(L, 1)));
+    if (argc == 1) {
+        int range = (int) luaL_checkinteger(L, 1);
+        nhl_rnglog_set_lua_caller(L, "nh.rn2");
+        lua_pushinteger(L, (rn2)(range));
+    }
     else
         nhl_error(L, "Wrong args");
 
@@ -936,11 +1070,16 @@ nhl_random(lua_State *L)
 {
     int argc = lua_gettop(L);
 
-    if (argc == 1)
-        lua_pushinteger(L, rn2((int) luaL_checkinteger(L, 1)));
-    else if (argc == 2)
-        lua_pushinteger(L, luaL_checkinteger(L, 1)
-                               + rn2((int) luaL_checkinteger(L, 2)));
+    if (argc == 1) {
+        int range = (int) luaL_checkinteger(L, 1);
+        nhl_rnglog_set_lua_caller(L, "nh.random");
+        lua_pushinteger(L, (rn2)(range));
+    } else if (argc == 2) {
+        lua_Integer base = luaL_checkinteger(L, 1);
+        int range = (int) luaL_checkinteger(L, 2);
+        nhl_rnglog_set_lua_caller(L, "nh.random");
+        lua_pushinteger(L, base + (rn2)(range));
+    }
     else
         nhl_error(L, "Wrong args");
 

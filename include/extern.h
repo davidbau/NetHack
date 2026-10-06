@@ -2815,6 +2815,13 @@ extern const char *harness_getenv(const char *);
 extern void nh_deterministic_qsort(void *, size_t, size_t,
                                    int (QSORTCALLBACK *)(const void *,
                                                          const void *));
+extern void rng_log_init(void);
+extern boolean harness_trace_on(const char *);
+extern void dbg_log(const char *, const char *, ...) PRINTF_F(2, 3);
+extern boolean rng_log_enabled(void);
+extern void rng_log_set_caller(const char *, int, const char *);
+extern int rng_log_get_call_count(void);
+extern long rng_log_get_position(void);
 
 /* ### role.c ### */
 
