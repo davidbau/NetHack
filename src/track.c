@@ -34,6 +34,7 @@ settrack(void)
     utrack[utpnt].x = u.ux;
     utrack[utpnt].y = u.uy;
     utpnt++;
+    event_log("settrack[pos=%d,%d utpnt=%d utcnt=%d]", u.ux, u.uy, utpnt, utcnt);
 }
 
 /* get a track coord on or next to x,y and last tracked by hero,

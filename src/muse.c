@@ -2643,6 +2643,7 @@ you_aggravate(struct monst *mtmp)
     docrt();
     if (unconscious()) {
         gm.multi = -1;
+        event_log("multi[%s=%d]", __func__, (int)gm.multi);
         gn.nomovemsg = "Aggravated, you are jolted into full consciousness.";
     }
     newsym(mtmp->mx, mtmp->my);

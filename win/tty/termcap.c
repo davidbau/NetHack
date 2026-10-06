@@ -1351,6 +1351,7 @@ tty_delay_output(void)
            bumps nomux_anim_id, which we include in the event marker
            so the appendix entry can be cross-referenced. */
         nomux_capture_write_screen();
+        event_log("anim_frame[id=%d]", nomux_anim_id);
 #endif
         return;
     }

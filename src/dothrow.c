@@ -925,6 +925,7 @@ hurtle_step(genericptr_t arg, coordxy x, coordxy y)
             /* couldn't move while hurtling; allow movement now so that
                drown() will give a chance to crawl out of pool and survive */
             gm.multi = 0;
+            event_log("multi[%s=%d]", __func__, (int)gm.multi);
             (void) drown();
             return FALSE;
         } else if (!Is_waterlevel(&u.uz) && !stopping_short) {

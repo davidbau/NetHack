@@ -382,7 +382,7 @@ bribe(struct monst *mtmp, const char *prompt)
         You("give %s %ld %s.", mon_nam(mtmp), offer, currency(offer));
     }
     (void) money2mon(mtmp, offer);
-    disp.botl = TRUE;
+    SET_BOTL();
     return offer;
 }
 

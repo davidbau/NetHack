@@ -380,8 +380,10 @@ fixup_death(int how)
                 else /* remove the helplessness reason */
                     gm.multi_reason = (char *) 0;
                 gm.multireasonbuf[0] = '\0'; /* dynamic buf stale either way */
-                if (death_fixups[i].unmulti) /* possibly hide helplessness */
+                if (death_fixups[i].unmulti) { /* possibly hide helplessness */
                     gm.multi = 0L;
+                    event_log("multi[%s=%d]", __func__, (int)gm.multi);
+                }
                 break;
             }
     }
@@ -730,6 +732,7 @@ savelife(int how)
     }
     gn.nomovemsg = "You survived that attempt on your life.";
     svc.context.move = 0;
+    event_log("ctx_move[%s=%d umv=%d]", __func__, (int)svc.context.move, u.umovement);
 
     gm.multi = -1; /* can't move again during the current turn */
     /* in case being life-saved is immediately followed by being killed
@@ -741,7 +744,7 @@ savelife(int how)
 
     if (u.utrap && u.utraptype == TT_LAVA)
         reset_utrap(FALSE);
-    disp.botl = TRUE;
+    SET_BOTL();
     u.ugrave_arise = NON_PM;
     HUnchanging = 0L;
     curs_on_u();
@@ -1046,7 +1049,7 @@ done(int how)
         disp.botl = disp.botlx = disp.time_botl = FALSE;
     } else {
         /* otherwise force full status update */
-        disp.botlx = TRUE;
+        SET_BOTLX();
         bot();
     }
 
@@ -1079,7 +1082,7 @@ done(int how)
                negative (-1 is used as a flag in some circumstances
                which don't apply when actually dying due to HP loss) */
             u.uhp = u.mh = 0;
-            disp.botl = TRUE;
+            SET_BOTL();
         }
     }
     if (Lifesaved && (how <= GENOCIDED)) {

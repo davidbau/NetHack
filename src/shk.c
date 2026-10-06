@@ -173,7 +173,7 @@ money2mon(struct monst *mon, long amount)
         remove_worn_item(ygold, FALSE); /* quiver */
     freeinv(ygold);
     add_to_minv(mon, ygold);
-    disp.botl = TRUE;
+    SET_BOTL();
     return amount;
 }
 
@@ -207,7 +207,7 @@ money2u(struct monst *mon, long amount)
         dropy(mongold);
     } else {
         addinv(mongold);
-        disp.botl = TRUE;
+        SET_BOTL();
     }
 }
 
@@ -1323,7 +1323,7 @@ pay(long tmp, struct monst *shkp)
         money2mon(shkp, balance);
     else if (balance < 0)
         money2u(shkp, -balance);
-    disp.botl = TRUE;
+    SET_BOTL();
     if (robbed) {
         robbed -= tmp;
         if (robbed < 0)
@@ -1776,6 +1776,7 @@ dopay(void)
             pay_done;
 
     gm.multi = 0;
+    event_log("multi[%s=%d]", __func__, (int)gm.multi);
 
     /* Find how many shk's there are, how many are in
      * sight, and are you in a shop room with one.
@@ -2006,7 +2007,7 @@ dopay(void)
                 eshkp->debit = 0L;
                 eshkp->loan = 0L;
                 You("pay that debt.");
-                disp.botl = TRUE;
+                SET_BOTL();
             } else {
                 dtmp -= eshkp->credit;
                 eshkp->credit = 0L;
@@ -2015,7 +2016,7 @@ dopay(void)
                 eshkp->loan = 0L;
                 pline("That debt is partially offset by your credit.");
                 You("pay the remainder.");
-                disp.botl = TRUE;
+                SET_BOTL();
             }
             paid = TRUE;
         }
@@ -2674,14 +2675,14 @@ inherits(
                 eshkp->robbed = 0L;
             if (umoney > 0L) {
                 money2mon(shkp, umoney);
-                disp.botl = TRUE;
+                SET_BOTL();
             }
             if (!silently)
                 pline("%s %s all your possessions.", Shknam(shkp), takes);
             taken = TRUE;
         } else {
             money2mon(shkp, loss);
-            disp.botl = TRUE;
+            SET_BOTL();
             if (!silently)
                 pline("%s %s the %ld %s %sowed %s.", Shknam(shkp),
                       takes, loss, currency(loss),
@@ -5341,7 +5342,7 @@ pay_for_damage(const char *dmgstr, boolean cant_mollify)
         cost_of_damage = check_credit(cost_of_damage, shkp);
         if (cost_of_damage > 0L) {
             money2mon(shkp, cost_of_damage);
-            disp.botl = TRUE;
+            SET_BOTL();
         }
         pline("Mollified, %s accepts your restitution.", shkname(shkp));
         /* move shk back to his home loc */

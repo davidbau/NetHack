@@ -702,6 +702,7 @@ doconsult(struct monst *oracl)
     char qbuf[QBUFSZ];
 
     gm.multi = 0;
+    event_log("multi[%s=%d]", __func__, (int)gm.multi);
     umoney = money_cnt(gi.invent);
 
     if (!oracl) {
@@ -740,7 +741,7 @@ doconsult(struct monst *oracl)
         break;
     }
     money2mon(oracl, (long) u_pay);
-    disp.botl = TRUE;
+    SET_BOTL();
     if (!u.uevent.major_oracle && !u.uevent.minor_oracle)
         record_achievement(ACH_ORCL);
     add_xpts = 0; /* first oracle of each type gives experience points */

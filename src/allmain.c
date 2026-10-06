@@ -78,7 +78,7 @@ moveloop_preamble(boolean resuming)
         u.umovement = NORMAL_SPEED;
         initrack();
     }
-    disp.botlx = TRUE; /* for STATUS_HILITES */
+    SET_BOTLX(); /* for STATUS_HILITES */
     if (resuming) { /* restoring old game */
         read_engr_at(u.ux, u.uy); /* subset of pickup() */
         fix_shop_damage();
@@ -92,6 +92,7 @@ moveloop_preamble(boolean resuming)
 
     u.uz0.dlevel = u.uz.dlevel;
     svc.context.move = 0;
+    event_log("ctx_move[%s=%d umv=%d]", __func__, (int)svc.context.move, u.umovement);
 
     /* finish processing "--debug:fuzzer" from the command line */
     if (iflags.fuzzerpending) {
@@ -151,6 +152,10 @@ u_calc_moveamt(int wtcap)
     u.umovement += moveamt;
     if (u.umovement < 0)
         u.umovement = 0;
+    /* Per-step umov tracing so cross-engine divergences are visible in
+     * the event stream. Parity with JS's u_calc_moveamt instrumentation. */
+    event_log("u_calc_moveamt[base=%d wtcap=%d moveamt=%d umv=%d]",
+              gy.youmonst.data->mmove, wtcap, moveamt, u.umovement);
 }
 
 /* small chance of generating a new random monster */
@@ -231,8 +236,14 @@ moveloop_core(void)
                 /* reallocate movement rations to monsters; don't need
                    to skip dead monsters here because they will have
                    been purged at end of their previous round of moving */
-                for (mtmp = fmon; mtmp; mtmp = mtmp->nmon)
-                    mtmp->movement += mcalcmove(mtmp, TRUE);
+                for (mtmp = fmon; mtmp; mtmp = mtmp->nmon) {
+                    int old_mv = mtmp->movement;
+                    int added = mcalcmove(mtmp, TRUE);
+                    mtmp->movement += added;
+                    event_log("mcalcmove[%d@%d,%d speed=%d mv=%d->%d]",
+                              monsndx(mtmp->data), mtmp->mx, mtmp->my,
+                              mtmp->data->mmove, old_mv, mtmp->movement);
+                }
 
                 /* occasionally add another monster; since this takes
                    place after movement has been allotted, the new
@@ -261,7 +272,7 @@ moveloop_core(void)
                 gh.hero_seq = svm.moves << 3;
 
                 if (flags.time && !svc.context.run)
-                    disp.time_botl = TRUE; /* 'moves' just changed */
+                    SET_TIME_BOTL(); /* 'moves' just changed */
 
                 /********************************/
                 /* once-per-turn things go here */
@@ -482,6 +493,7 @@ moveloop_core(void)
     m_everyturn_effect(&gy.youmonst);
 
     svc.context.move = 1;
+    event_log("ctx_move[%s=%d umv=%d]", __func__, (int)svc.context.move, u.umovement);
 
     if (gm.multi >= 0 && go.occupation) {
 #if defined(MICRO) || defined(WIN32CON)
@@ -519,6 +531,7 @@ moveloop_core(void)
         if (!gm.multi) {
             /* lookaround may clear multi */
             svc.context.move = 0;
+            event_log("ctx_move[%s=%d umv=%d]", __func__, (int)svc.context.move, u.umovement);
             return;
         }
         if (svc.context.mv) {
@@ -551,7 +564,7 @@ moveloop_core(void)
         && (gm.multi && (!svc.context.travel ? !(gm.multi % 7)
                         : !(svm.moves % 7L)))) {
         if (flags.time && svc.context.run)
-            disp.botl = TRUE;
+            SET_BOTL();
         /* [should this be flush_screen() instead?] */
         display_nhwindow(WIN_MAP, FALSE);
     }
@@ -621,7 +634,7 @@ regen_pw(int wtcap)
         u.uen += rn1(upper, 1);
         if (u.uen > u.uenmax)
             u.uen = u.uenmax;
-        disp.botl = TRUE;
+        SET_BOTL();
         if (u.uen == u.uenmax)
             interrupt_multi("You feel full of energy.");
     }
@@ -653,7 +666,7 @@ regen_hp(int wtcap)
                 heal = 1;
         }
         if (heal) {
-            disp.botl = TRUE;
+            SET_BOTL();
             u.mh += heal;
             reached_full = (u.mh == u.mhmax);
         }
@@ -673,7 +686,7 @@ regen_hp(int wtcap)
                 heal++;
 
             if (heal) {
-                disp.botl = TRUE;
+                SET_BOTL();
                 u.uhp += heal;
                 if (u.uhp > u.uhpmax)
                     u.uhp = u.uhpmax;
@@ -692,16 +705,18 @@ regen_hp(int wtcap)
 void
 stop_occupation(void)
 {
+    midlog_enter("stop_occupation", __FILE__, __LINE__, __func__);
     if (go.occupation) {
         if (!maybe_finished_meal(TRUE))
             You("stop %s.", go.occtxt);
         go.occupation = (int (*)(void)) 0;
-        disp.botl = TRUE; /* in case u.uhs changed */
+        SET_BOTL(); /* in case u.uhs changed */
         nomul(0);
     } else if (gm.multi >= 0) {
         nomul(0);
     }
     cmdq_clear(CQ_CANNED);
+    midlog_exit_void("stop_occupation", __FILE__, __LINE__, __func__);
 }
 
 void
@@ -789,7 +804,7 @@ newgame(void)
 
     /* make sure welcome messages are given before noticing monsters */
     notice_mon_off();
-    disp.botlx = TRUE;
+    SET_BOTLX();
     svc.context.ident = 2;  /* id 1 is reserved for gy.youmonst */
     svc.context.warnlevel = 1;
     svc.context.next_attrib_check = 600L; /* arbitrary first setting */

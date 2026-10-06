@@ -2385,7 +2385,7 @@ use_unicorn_horn(struct obj **optr)
     }
 
     if (did_prop)
-        disp.botl = TRUE;
+        SET_BOTL();
     else
         pline("%s", nothing_seems_to_happen);
 
@@ -2557,6 +2557,8 @@ use_figurine(struct obj **optr)
     }
     if (!getdir((char *) 0)) {
         svc.context.move = gm.multi = 0;
+        event_log("multi[%s=%d]", __func__, (int)gm.multi);
+        event_log("ctx_move[%s=%d umv=%d]", __func__, (int)svc.context.move, u.umovement);
         return ECMD_CANCEL;
     }
     x = u.ux + u.dx;

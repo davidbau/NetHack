@@ -3,6 +3,7 @@
 /*-Copyright (c) Michael Allison, 2006. */
 /* NetHack may be freely redistributed.  See license for details. */
 
+#define MIDLOG_IN_BOTL_C
 #include "hack.h"
 
 extern const char *const hu_stat[]; /* defined in eat.c */
@@ -1716,7 +1717,7 @@ status_initialize(
         status_enablefield(fld, fieldname, fieldfmt, fldenabl);
     }
     gu.update_all = TRUE;
-    disp.botlx = TRUE;
+    SET_BOTLX();
 }
 
 void
@@ -2300,7 +2301,7 @@ status_eval_next_unhilite(void)
             prev->time = curr->time;
 
             curr->chg = prev->chg = FALSE;
-            disp.botl = TRUE;
+            SET_BOTL();
         }
         if (disp.botl)
             continue; /* just process other gb.blstats[][].time and .chg */
@@ -2311,7 +2312,7 @@ status_eval_next_unhilite(void)
             && hilite_reset_needed(curr, this_unhilite + 1L)) {
             next_unhilite = this_unhilite;
             if (next_unhilite < gb.bl_hilite_moves)
-                disp.botl = TRUE;
+                SET_BOTL();
         }
     }
 }
@@ -2327,7 +2328,7 @@ reset_status_hilites(void)
             gb.blstats[0][i].time = gb.blstats[1][i].time = 0L;
         gu.update_all = TRUE;
     }
-    disp.botlx = TRUE;
+    SET_BOTLX();
 }
 
 /* test whether the text from a title rule matches the string for

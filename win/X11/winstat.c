@@ -1158,7 +1158,7 @@ stat_resized(Widget w, XtPointer call_data, XtPointer client_data)
     }
 
     /* tell core to call us back for a full status update */
-    disp.botlx = TRUE;
+    SET_BOTLX();
 }
 
 void

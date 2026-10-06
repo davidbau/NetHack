@@ -654,6 +654,12 @@ mon_catchup_elapsed_time(
     else
         imv = (int) nmv;
 
+    event_log("catchup[%s elapsed=%d trapped=%d conf=%d stun=%d tame=%d eat=%d spec=%d]",
+              event_mon_ref(mtmp, monsndx(mtmp->data), mtmp->mx, mtmp->my),
+              imv,
+              mtmp->mtrapped ? 1 : 0, mtmp->mconf ? 1 : 0,
+              mtmp->mstun ? 1 : 0, (int) mtmp->mtame, mtmp->meating,
+              mtmp->mspec_used);
     /* might stop being afraid, blind or frozen */
     /* set to 1 and allow final decrement in movemon() */
     if (mtmp->mblinded) {

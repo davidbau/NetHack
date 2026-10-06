@@ -2344,6 +2344,7 @@ boolean
 cmd_safety_prevention(const char *ucverb, const char *cmddesc,
                       const char *act, int *flagcounter)
 {
+    midlog_enter("cmd_safety_prevention", __FILE__, __LINE__, __func__);
     if (flags.safe_wait && !iflags.menu_requested && !gm.multi) {
         char buf[QBUFSZ];
 
@@ -2354,13 +2355,19 @@ cmd_safety_prevention(const char *ucverb, const char *cmddesc,
 
         if (monster_nearby()) {
             Norep("%s%s", act, buf);
+            midlog_exit_int("cmd_safety_prevention", TRUE,
+                            __FILE__, __LINE__, __func__);
             return TRUE;
         } else if (danger_uprops()) {
             Norep("%s doesn't feel like a good idea right now.", ucverb);
+            midlog_exit_int("cmd_safety_prevention", TRUE,
+                            __FILE__, __LINE__, __func__);
             return TRUE;
         }
     }
     *flagcounter = 0;
+    midlog_exit_int("cmd_safety_prevention", FALSE,
+                    __FILE__, __LINE__, __func__);
     return FALSE;
 }
 
@@ -2449,7 +2456,7 @@ set_wounded_legs(long side, int timex)
      * You still call this function, but don't lose hp.
      * Caller is also responsible for adjusting messages.
      */
-    disp.botl = TRUE;
+    SET_BOTL();
     if (!Wounded_legs)
         ATEMP(A_DEX)--;
 
@@ -2469,7 +2476,7 @@ heal_legs(
     int how) /* 0: ordinary, 1: dismounting steed, 2: limbs turn to stone */
 {
     if (Wounded_legs) {
-        disp.botl = TRUE;
+        SET_BOTL();
         if (ATEMP(A_DEX) < 0)
             ATEMP(A_DEX)++;
 

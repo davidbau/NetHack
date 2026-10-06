@@ -1266,19 +1266,19 @@ cancel_item(struct obj *obj)
         case RIN_GAIN_STRENGTH:
             if ((obj->owornmask & W_RING) != 0L) {
                 ABON(A_STR) -= obj->spe;
-                disp.botl = TRUE;
+                SET_BOTL();
             }
             break;
         case RIN_GAIN_CONSTITUTION:
             if ((obj->owornmask & W_RING) != 0L) {
                 ABON(A_CON) -= obj->spe;
-                disp.botl = TRUE;
+                SET_BOTL();
             }
             break;
         case RIN_ADORNMENT:
             if ((obj->owornmask & W_RING) != 0L) {
                 ABON(A_CHA) -= obj->spe;
-                disp.botl = TRUE;
+                SET_BOTL();
             }
             break;
         case RIN_INCREASE_ACCURACY:
@@ -1291,24 +1291,24 @@ cancel_item(struct obj *obj)
             break;
         case RIN_PROTECTION:
             if ((obj->owornmask & W_RING) != 0L)
-                disp.botl = TRUE;
+                SET_BOTL();
             break;
         case GAUNTLETS_OF_DEXTERITY:
             if ((obj->owornmask & W_ARMG) != 0L) {
                 ABON(A_DEX) -= obj->spe;
-                disp.botl = TRUE;
+                SET_BOTL();
             }
             break;
         case HELM_OF_BRILLIANCE:
             if ((obj->owornmask & W_ARMH) != 0L) {
                 ABON(A_INT) -= obj->spe;
                 ABON(A_WIS) -= obj->spe;
-                disp.botl = TRUE;
+                SET_BOTL();
             }
             break;
         default:
             if ((obj->owornmask & W_ARMOR) != 0L) /* AC */
-                disp.botl = TRUE;
+                SET_BOTL();
             break;
         }
     }
@@ -1424,19 +1424,19 @@ drain_item(struct obj *obj, boolean by_you)
     case RIN_GAIN_STRENGTH:
         if ((obj->owornmask & W_RING) && u_ring) {
             ABON(A_STR)--;
-            disp.botl = TRUE;
+            SET_BOTL();
         }
         break;
     case RIN_GAIN_CONSTITUTION:
         if ((obj->owornmask & W_RING) && u_ring) {
             ABON(A_CON)--;
-            disp.botl = TRUE;
+            SET_BOTL();
         }
         break;
     case RIN_ADORNMENT:
         if ((obj->owornmask & W_RING) && u_ring) {
             ABON(A_CHA)--;
-            disp.botl = TRUE;
+            SET_BOTL();
         }
         break;
     case RIN_INCREASE_ACCURACY:
@@ -1449,19 +1449,19 @@ drain_item(struct obj *obj, boolean by_you)
         break;
     case RIN_PROTECTION:
         if (u_ring)
-            disp.botl = TRUE; /* bot() will recalc u.uac */
+            SET_BOTL(); /* bot() will recalc u.uac */
         break;
     case HELM_OF_BRILLIANCE:
         if ((obj->owornmask & W_ARMH) && (obj == uarmh)) {
             ABON(A_INT)--;
             ABON(A_WIS)--;
-            disp.botl = TRUE;
+            SET_BOTL();
         }
         break;
     case GAUNTLETS_OF_DEXTERITY:
         if ((obj->owornmask & W_ARMG) && (obj == uarmg)) {
             ABON(A_DEX)--;
-            disp.botl = TRUE;
+            SET_BOTL();
         }
         break;
     default:
@@ -3197,7 +3197,7 @@ cancel_monst(struct monst *mdef, struct obj *obj, boolean youattack,
             cancel_item(otmp);
 
         if (youdefend) {
-            disp.botl = TRUE; /* potential AC change */
+            SET_BOTL(); /* potential AC change */
             find_ac();
             /* update_inventory(); -- handled by caller */
         }

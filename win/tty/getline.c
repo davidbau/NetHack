@@ -54,6 +54,7 @@ hooked_tty_getlin(
         more();
     cw->flags &= ~WIN_STOP;
     ttyDisplay->toplin = TOPLINE_SPECIAL_PROMPT;
+    event_log("toplin[%s=%d]", __func__, (int)ttyDisplay->toplin);
     ttyDisplay->inread++;
 
     /*
@@ -211,6 +212,7 @@ hooked_tty_getlin(
             tty_nhbell();
     }
     ttyDisplay->toplin = TOPLINE_NON_EMPTY;
+    event_log("toplin[%s=%d]", __func__, (int)ttyDisplay->toplin);
     ttyDisplay->inread--;
     clear_nhwindow(WIN_MESSAGE); /* clean up after ourselves */
 

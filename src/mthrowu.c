@@ -3,6 +3,7 @@
 /*-Copyright (c) Pasi Kallinen, 2016. */
 /* NetHack may be freely redistributed.  See license for details. */
 
+#define MIDLOG_IN_MTHROWU_C
 #include "hack.h"
 
 staticfn int monmulti(struct monst *, struct obj *, struct obj *);

@@ -497,6 +497,7 @@ resize_tty(void)
                 /* cop-out */
                 oldtoplin = TOPLINE_EMPTY; /* don't restore it below */
                 ttyDisplay->toplin = TOPLINE_NON_EMPTY;
+                event_log("toplin[%s=%d]", __func__, (int)ttyDisplay->toplin);
                 addtopl("Press a key to continue: ");
                 resize_mesg++;
                 break;
@@ -506,6 +507,7 @@ resize_tty(void)
 
     if (oldtoplin != TOPLINE_EMPTY) {
         ttyDisplay->toplin = oldtoplin;
+        event_log("toplin[%s=%d]", __func__, (int)ttyDisplay->toplin);
         addtopl(gt.toplines);
     }
     if (map_active) {
@@ -586,6 +588,7 @@ tty_init_nhwindows(int *argcp UNUSED, char **argv UNUSED)
     /* set up tty descriptor */
     ttyDisplay = (struct DisplayDesc *) alloc(sizeof (struct DisplayDesc));
     ttyDisplay->toplin = TOPLINE_EMPTY;
+    event_log("toplin[%s=%d]", __func__, (int)ttyDisplay->toplin);
     ttyDisplay->topl_utf8 = 0;  /* putmixed may set this */
     ttyDisplay->rows = hgt;
     ttyDisplay->cols = wid;
@@ -1055,6 +1058,8 @@ erase_menu_or_text(
     struct WinDesc *cw,
     boolean clear)
 {
+    event_log("erase_menu_or_text[win=%d offx=%d maxrow=%d]",
+              (int) window, (int) cw->offx, (int) cw->maxrow);
     if (cw->offx == 0) {
         if (cw->offy) {
             tty_curs(window, 1, 0);
@@ -1134,6 +1139,9 @@ tty_clear_nhwindow(winid window)
     case NHW_MESSAGE:
         if (ttyDisplay->toplin != TOPLINE_EMPTY) {
             if (!erasing_tty_screen) {
+        event_log("tty_clear_msg[cury=%d toplin=%d]",
+                  cw ? (int) cw->cury : -1,
+                  ttyDisplay ? (int) ttyDisplay->toplin : -1);
                 home();
                 cl_end();
                 if (cw->cury)
@@ -1141,6 +1149,7 @@ tty_clear_nhwindow(winid window)
             }
             cw->curx = cw->cury = 0;
             ttyDisplay->toplin = TOPLINE_EMPTY;
+            event_log("toplin[%s=%d]", __func__, (int)ttyDisplay->toplin);
         }
         break;
     case NHW_STATUS:
@@ -1156,11 +1165,11 @@ tty_clear_nhwindow(winid window)
             cw->data[i][n - 1] = '\0';
             /*finalx[i][NOW] = finalx[i][BEFORE] = 0;*/
         }
-        disp.botlx = TRUE;
+        SET_BOTLX();
         break;
     case NHW_MAP:
         /* cheap -- clear the whole thing and tell nethack to redraw botl */
-        disp.botlx = TRUE;
+        SET_BOTLX();
         FALLTHROUGH;
         /*FALLTHRU*/
     case NHW_BASE:
@@ -2000,8 +2009,10 @@ tty_display_nhwindow(
             ttyDisplay->toplin = TOPLINE_NEED_MORE; /* more resets this */
             tty_clear_nhwindow(window);
             nhassert(ttyDisplay->toplin == TOPLINE_EMPTY);
-        } else
+        } else {
             ttyDisplay->toplin = TOPLINE_EMPTY;
+            event_log("toplin[%s=%d]", __func__, (int)ttyDisplay->toplin);
+        }
         cw->curx = cw->cury = 0;
         if (!cw->active)
             iflags.window_inited = TRUE;
@@ -2009,8 +2020,10 @@ tty_display_nhwindow(
     case NHW_MAP:
         end_glyphout();
         if (blocking) {
-            if (ttyDisplay->toplin != TOPLINE_EMPTY)
+            if (ttyDisplay->toplin != TOPLINE_EMPTY) {
                 ttyDisplay->toplin = TOPLINE_NEED_MORE;
+                event_log("toplin[%s=%d]", __func__, (int)ttyDisplay->toplin);
+            }
             tty_display_nhwindow(WIN_MESSAGE, TRUE);
             return;
         }
@@ -2059,6 +2072,7 @@ tty_display_nhwindow(
             } else
                 term_clear_screen();
             ttyDisplay->toplin = TOPLINE_EMPTY;
+            event_log("toplin[%s=%d]", __func__, (int)ttyDisplay->toplin);
         } else {
             if (WIN_MESSAGE != WIN_ERR)
                 tty_clear_nhwindow(WIN_MESSAGE);
@@ -2081,6 +2095,9 @@ tty_dismiss_nhwindow(winid window)
     HUPSKIP();
     if (window == WIN_ERR || (cw = wins[window]) == (struct WinDesc *) 0)
         ttywindowpanic();
+
+    event_log("tty_dismiss[win=%d type=%d active=%d]",
+              (int) window, (int) cw->type, (int) cw->active);
 
     print_vt_code2(AVTC_SELECT_WINDOW, window);
 
@@ -3778,6 +3795,7 @@ tty_wait_synch(void)
         } else if (ttyDisplay->inread > program_state.gameover) {
             /* this can only happen if we were reading and got interrupted */
             ttyDisplay->toplin = TOPLINE_SPECIAL_PROMPT;
+            event_log("toplin[%s=%d]", __func__, (int)ttyDisplay->toplin);
             /* do this twice; 1st time gets the Quit? message again */
             (void) tty_doprev_message();
             (void) tty_doprev_message();
@@ -3795,6 +3813,8 @@ docorner(
     int y;
     struct WinDesc *cw = wins[WIN_MAP];
     int ystart = 0;
+    event_log("docorner[xmin=%d ymax=%d between=%d]",
+              xmin, ymax, ystart_between_menu_pages);
 #ifdef TTY_PERM_INVENT
     struct WinDesc *icw = 0;
 
@@ -3856,7 +3876,7 @@ docorner(
     if (ymax >= (int) wins[WIN_STATUS]->offy
         && !ystart_between_menu_pages) {
         /* we have wrecked the bottom line */
-        disp.botlx = TRUE;
+        SET_BOTLX();
         bot();
     }
 }
@@ -4295,8 +4315,10 @@ tty_nhgetch(void)
         i = '\033'; /* same for EOF */
     }
     /* topline has been seen - we can clear the need for --More-- */
-    if (ttyDisplay && ttyDisplay->toplin == TOPLINE_NEED_MORE)
+    if (ttyDisplay && ttyDisplay->toplin == TOPLINE_NEED_MORE) {
         ttyDisplay->toplin = TOPLINE_NON_EMPTY;
+        event_log("toplin[%s=%d]", __func__, (int)ttyDisplay->toplin);
+    }
 #ifdef TTY_TILES_ESCCODES
     {
         /* hack to force output of the window select code */
@@ -4342,8 +4364,10 @@ tty_nh_poskey(coordxy *x UNUSED, coordxy *y UNUSED, int *mod UNUSED)
     if (!i && mod && (*mod == 0 || *mod == EOF))
         i = '\033'; /* map NUL or EOF to ESC, nethack doesn't expect either */
     /* topline has been seen - we can clear the need for --More-- */
-    if (ttyDisplay && ttyDisplay->toplin == TOPLINE_NEED_MORE)
+    if (ttyDisplay && ttyDisplay->toplin == TOPLINE_NEED_MORE) {
         ttyDisplay->toplin = TOPLINE_NON_EMPTY;
+        event_log("toplin[%s=%d]", __func__, (int)ttyDisplay->toplin);
+    }
 #else /* !WIN32CON */
     i = tty_nhgetch();
 #endif /* ?WIN32CON */

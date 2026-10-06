@@ -318,6 +318,7 @@ attack_checks(
             Sprintf(qbuf, "Really attack %s?", mon_nam(mtmp));
             if (!paranoid_query(ParanoidHit, qbuf)) {
                 svc.context.move = 0;
+                event_log("ctx_move[%s=%d umv=%d]", __func__, (int)svc.context.move, u.umovement);
                 return TRUE;
             }
         }
@@ -4114,7 +4115,7 @@ mhitm_ad_phys(
                         exercise(A_STR, FALSE);
                     /* inflict damage now; we know it can't be fatal */
                     u.mh -= tmp;
-                    disp.botl = TRUE;
+                    SET_BOTL();
                     mhm->damage = 0; /* don't inflict more damage below */
                     if (cloneu())
                         You("divide as %s hits you!", mon_nam(magr));
@@ -4367,7 +4368,7 @@ mhitm_ad_heal(
                 exercise(A_CON, TRUE);
             if (Sick)
                 make_sick(0L, (char *) 0, FALSE, SICK_ALL);
-            disp.botl = TRUE;
+            SET_BOTL();
             if (goaway) {
                 mongone(magr);
                 mhm->done = TRUE;

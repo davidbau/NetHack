@@ -109,7 +109,7 @@ setuwep(struct obj *obj)
     if (uwep == obj
         && ((uwep && uwep->oartifact == ART_OGRESMASHER)
             || (olduwep && olduwep->oartifact == ART_OGRESMASHER)))
-        disp.botl = TRUE; /* gaining or losing Con bonus */
+        SET_BOTL(); /* gaining or losing Con bonus */
     /* This message isn't printed in the caller because it happens
      * *whenever* Sunsword is unwielded, from whatever cause. */
     if (uwep == obj && artifact_light(olduwep) && olduwep->lamplit) {
@@ -120,7 +120,7 @@ setuwep(struct obj *obj)
     if (uwep == obj
         && (u_wield_art(ART_OGRESMASHER)
             || is_art(olduwep, ART_OGRESMASHER)))
-        disp.botl = TRUE;
+        SET_BOTL();
     /* Note: Explicitly wielding a pick-axe will not give a "bashing"
      * message.  Wielding one via 'a'pplying it will.
      * 3.2.2:  Wielding arbitrary objects will give bashing message too.
@@ -273,7 +273,7 @@ ready_weapon(struct obj *wep)
         }
     }
     if ((had_wep != (uwep != 0)) && condtests[bl_bareh].enabled)
-        disp.botl = TRUE;
+        SET_BOTL();
     return res;
 }
 
@@ -365,6 +365,7 @@ dowield(void)
 
     /* May we attempt this? */
     gm.multi = 0;
+    event_log("multi[%s=%d]", __func__, (int)gm.multi);
     if (cantwield(gy.youmonst.data)) {
         pline("Don't be ridiculous!");
         return ECMD_FAIL;
@@ -470,6 +471,7 @@ doswapweapon(void)
 
     /* May we attempt this? */
     gm.multi = 0;
+    event_log("multi[%s=%d]", __func__, (int)gm.multi);
     if (cantwield(gy.youmonst.data)) {
         pline("Don't be ridiculous!");
         return ECMD_FAIL;
@@ -524,6 +526,7 @@ doquiver_core(const char *verb) /* "ready" or "fire" */
     /* Since the quiver isn't in your hands, don't check cantwield(),
        will_weld(), touch_petrifies(), etc. */
     gm.multi = 0;
+    event_log("multi[%s=%d]", __func__, (int)gm.multi);
     if (!gi.invent) {
         /* could accept '-' to empty quiver, but there's no point since
            inventory is empty so uquiver is already Null */
@@ -841,7 +844,7 @@ set_twoweap(boolean on_off)
     if (on_off != u.twoweap) {
         u.twoweap = on_off;
         if (flags.weaponstatus)
-            disp.botl = TRUE;
+            SET_BOTL();
     }
 }
 

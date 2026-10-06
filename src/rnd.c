@@ -86,6 +86,67 @@ dbg_log(const char *channel, const char *fmt, ...)
     fputc('\n', rng_logfile);
 }
 
+#define MIDLOG_STACK_SIZE 16
+static int midlog_stack[MIDLOG_STACK_SIZE];
+static int midlog_depth = 0;
+
+void
+midlog_enter(const char *fn, const char *file, int line, const char *caller)
+{
+    if (!rng_logfile)
+        return;
+    if (midlog_depth < MIDLOG_STACK_SIZE)
+        midlog_stack[midlog_depth] = rng_call_count;
+    midlog_depth++;
+    fprintf(rng_logfile, ">%s @ %s(%s:%d)\n", fn, caller, file, line);
+}
+
+void
+midlog_exit_int(const char *fn, int result,
+                const char *file, int line, const char *caller)
+{
+    int entry = 0;
+
+    if (!rng_logfile)
+        return;
+    --midlog_depth;
+    if (midlog_depth >= 0 && midlog_depth < MIDLOG_STACK_SIZE)
+        entry = midlog_stack[midlog_depth];
+    fprintf(rng_logfile, "<%s=%d #%d-%d @ %s(%s:%d)\n",
+            fn, result, entry + 1, rng_call_count, caller, file, line);
+}
+
+void
+midlog_exit_void(const char *fn,
+                 const char *file, int line, const char *caller)
+{
+    int entry = 0;
+
+    if (!rng_logfile)
+        return;
+    --midlog_depth;
+    if (midlog_depth >= 0 && midlog_depth < MIDLOG_STACK_SIZE)
+        entry = midlog_stack[midlog_depth];
+    fprintf(rng_logfile, "<%s #%d-%d @ %s(%s:%d)\n",
+            fn, entry + 1, rng_call_count, caller, file, line);
+}
+
+void
+midlog_exit_ptr(const char *fn, const void *result,
+                const char *file, int line, const char *caller)
+{
+    int entry = 0;
+
+    (void) result;
+    if (!rng_logfile)
+        return;
+    --midlog_depth;
+    if (midlog_depth >= 0 && midlog_depth < MIDLOG_STACK_SIZE)
+        entry = midlog_stack[midlog_depth];
+    fprintf(rng_logfile, "<%s #%d-%d @ %s(%s:%d)\n",
+            fn, entry + 1, rng_call_count, caller, file, line);
+}
+
 boolean
 rng_log_enabled(void)
 {
@@ -137,6 +198,44 @@ rng_log_write(const char *func, const char *args, int result)
         fprintf(rng_logfile, "%d %s(%s) = %d\n",
                 rng_call_count, func, args, result);
     }
+}
+
+/*
+ * Stable monster event reference formatting.
+ * Include m_id when a monster pointer is available to disambiguate mons.
+ */
+const char *
+event_mon_ref(const struct monst *mon, int mnum, coordxy x, coordxy y)
+{
+    static char refbuf[64];
+    if (mon) {
+        Snprintf(refbuf, sizeof refbuf, "%d#%lu@%d,%d", mnum,
+                 (unsigned long) mon->m_id, (int) x, (int) y);
+    } else {
+        Snprintf(refbuf, sizeof refbuf, "%d@%d,%d", mnum, (int) x, (int) y);
+    }
+
+    return refbuf;
+}
+
+/*
+ * Event logging.
+ *
+ * Writes ^event lines interleaved with the RNG log so differential-debug
+ * consumers can correlate state-changing events with the PRNG stream.
+ */
+void
+event_log(const char *fmt, ...)
+{
+    va_list ap;
+
+    if (!rng_logfile)
+        return;
+    fputc('^', rng_logfile);
+    va_start(ap, fmt);
+    vfprintf(rng_logfile, fmt, ap);
+    va_end(ap);
+    fputc('\n', rng_logfile);
 }
 
 #ifdef USE_ISAAC64

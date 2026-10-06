@@ -5359,7 +5359,7 @@ optfn_boolean(
         case opt_time:
             if (VIA_WINDOWPORT())
                 status_initialize(REASSESS_ONLY);
-            disp.botl = TRUE;
+            SET_BOTL();
             break;
         case opt_fixinv:
         case opt_price_quotes:
@@ -5403,7 +5403,7 @@ optfn_boolean(
             } else if (WINDOWPORT(Qt)) {
                 /* Qt doesn't support HILITE_STATUS or FLUSH_STATUS so fails
                    VIA_WINDOWPORT(), but it does support WC2_HITPOINTBAR */
-                disp.botlx = TRUE;
+                SET_BOTLX();
 #endif
             }
             break;

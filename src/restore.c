@@ -1082,6 +1082,7 @@ rest_levl(NHFILE *nhfp)
 void
 trickery(char *reason)
 {
+    event_log("trick[%s]", reason ? reason : "");
     pline("Strange, this map is not as I remember it.");
     pline("Somebody is trying some trickery here...");
     pline("This game is void.");

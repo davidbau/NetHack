@@ -3,6 +3,7 @@
 /*-Copyright (c) Robert Patrick Rankin, 2012. */
 /* NetHack may be freely redistributed.  See license for details. */
 
+#define MIDLOG_IN_DOGMOVE_C
 #include "hack.h"
 
 #include "mfndpos.h"
@@ -230,6 +231,9 @@ dog_eat(struct monst *mtmp,
     if (edog->hungrytime < svm.moves)
         edog->hungrytime = svm.moves;
     nutrit = dog_nutrition(mtmp, obj);
+    event_log("eat[%s,%d]",
+              event_mon_ref(mtmp, monsndx(mtmp->data), mtmp->mx, mtmp->my),
+              obj->otyp);
 
     if (devour) {
         if (mtmp->meating > 1)
@@ -402,11 +406,16 @@ staticfn int
 dog_invent(struct monst *mtmp, struct edog *edog, int udist)
 {
     coordxy omx, omy;
-    int carryamt = 0;
+    int carryamt = 0, diag_act = 0, diag_otyp = -1, diag_carry = 0;
     struct obj *obj, *otmp;
 
-    if (helpless(mtmp) || mtmp->meating)
+    if (helpless(mtmp) || mtmp->meating) {
+        event_log("dog_invent_decision[%s ud=%d act=%d otyp=%d carry=%d rv=%d]",
+                  event_mon_ref(mtmp, monsndx(mtmp->data), mtmp->mx, mtmp->my),
+                  udist, -1, -1, 0,
+                  0);
         return 0;
+    }
 
     omx = mtmp->mx;
     omy = mtmp->my;
@@ -420,6 +429,7 @@ dog_invent(struct monst *mtmp, struct edog *edog, int udist)
         if (!rn2(udist + 1) || !rn2(edog->apport))
             if (rn2(10) < edog->apport) {
                 relobj(mtmp, (int) mtmp->minvis, TRUE);
+                diag_act = 1;
                 if (edog->apport > 1)
                     edog->apport--;
                 edog->dropdist = udist; /* hpscdi!jon */
@@ -439,8 +449,14 @@ dog_invent(struct monst *mtmp, struct edog *edog, int udist)
             if ((edible <= CADAVER
                  /* starving pet is more aggressive about eating */
                  || (edog->mhpmax_penalty && edible == ACCFOOD))
-                && could_reach_item(mtmp, obj->ox, obj->oy))
-                return dog_eat(mtmp, obj, omx, omy, FALSE);
+                && could_reach_item(mtmp, obj->ox, obj->oy)) {
+                int rv = dog_eat(mtmp, obj, omx, omy, FALSE);
+                event_log("dog_invent_decision[%s ud=%d act=%d otyp=%d carry=%d rv=%d]",
+                          event_mon_ref(mtmp, monsndx(mtmp->data), omx, omy),
+                          udist, 2,
+                          obj->otyp, 0, rv);
+                return rv;
+            }
 
             carryamt = can_carry(mtmp, obj);
             if (carryamt > 0 && !obj->cursed
@@ -465,6 +481,9 @@ dog_invent(struct monst *mtmp, struct edog *edog, int udist)
                         obj_extract_self(otmp);
                         newsym(omx, omy);
                         (void) mpickobj(mtmp, otmp);
+                        diag_act = 3;
+                        diag_otyp = otmp->otyp;
+                        diag_carry = carryamt;
                         if (attacktype(mtmp->data, AT_WEAP)
                             && mtmp->weapon_check == NEED_WEAPON) {
                             mtmp->weapon_check = NEED_HTH_WEAPON;
@@ -476,6 +495,10 @@ dog_invent(struct monst *mtmp, struct edog *edog, int udist)
             }
         }
     }
+    event_log("dog_invent_decision[%s ud=%d act=%d otyp=%d carry=%d rv=%d]",
+              event_mon_ref(mtmp, monsndx(mtmp->data), omx, omy), udist,
+              diag_act, diag_otyp,
+              diag_carry, 0);
     return 0;
 }
 
@@ -525,6 +548,11 @@ dog_goal(
         if ((max_y = omy + SQSRCHRADIUS) >= ROWNO)
             max_y = ROWNO - 1;
 
+        event_log("dog_goal_start[M%u@%d,%d apport=%u minvent=%d ims=%d range=[%d..%d]x[%d..%d]]",
+                  mtmp->m_id, omx, omy, edog->apport,
+                  dog_has_minvent ? 1 : 0, in_masters_sight ? 1 : 0,
+                  min_x, max_x, min_y, max_y);
+
         /* nearby food is the first choice, then other objects */
         for (obj = fobj; obj; obj = obj->nobj) {
             nx = obj->ox;
@@ -532,32 +560,57 @@ dog_goal(
             if (nx >= min_x && nx <= max_x && ny >= min_y && ny <= max_y) {
                 otyp = dogfood(mtmp, obj);
                 /* skip inferior goals */
-                if (otyp > gg.gtyp || otyp == UNDEF)
+                if (otyp > gg.gtyp || otyp == UNDEF) {
+                    event_log("dog_goal_obj[M%u oid=%u@%d,%d food=%d gtyp=%d skip=inf]",
+                              mtmp->m_id, obj->o_id, nx, ny, otyp, gg.gtyp);
                     continue;
+                }
                 /* avoid cursed items unless starving */
                 if (cursed_object_at(nx, ny)
-                    && !(edog->mhpmax_penalty && otyp < MANFOOD))
+                    && !(edog->mhpmax_penalty && otyp < MANFOOD)) {
+                    event_log("dog_goal_obj[M%u oid=%u@%d,%d food=%d gtyp=%d skip=cur]",
+                              mtmp->m_id, obj->o_id, nx, ny, otyp, gg.gtyp);
                     continue;
+                }
                 /* skip completely unreachable goals */
                 if (!could_reach_item(mtmp, nx, ny)
-                    || !can_reach_location(mtmp, mtmp->mx, mtmp->my, nx, ny))
+                    || !can_reach_location(mtmp, mtmp->mx, mtmp->my, nx, ny)) {
+                    event_log("dog_goal_obj[M%u oid=%u@%d,%d food=%d gtyp=%d skip=rch]",
+                              mtmp->m_id, obj->o_id, nx, ny, otyp, gg.gtyp);
                     continue;
+                }
                 if (otyp < MANFOOD) {
                     if (otyp < gg.gtyp
                         || DDIST(nx, ny) < DDIST(gg.gx, gg.gy)) {
+                        event_log("dog_goal_obj[M%u oid=%u@%d,%d food=%d gtyp=%d sel=1]",
+                                  mtmp->m_id, obj->o_id, nx, ny, otyp, gg.gtyp);
                         gg.gx = nx;
                         gg.gy = ny;
                         gg.gtyp = otyp;
+                    } else {
+                        event_log("dog_goal_obj[M%u oid=%u@%d,%d food=%d gtyp=%d sel=0]",
+                                  mtmp->m_id, obj->o_id, nx, ny, otyp, gg.gtyp);
                     }
                 } else if (gg.gtyp == UNDEF && in_masters_sight
                            && !dog_has_minvent
                            && (!levl[omx][omy].lit || levl[u.ux][u.uy].lit)
-                           && (otyp == MANFOOD || m_cansee(mtmp, nx, ny))
-                           && edog->apport > rn2(8)
-                           && can_carry(mtmp, obj) > 0) {
-                    gg.gx = nx;
-                    gg.gy = ny;
-                    gg.gtyp = APPORT;
+                           && (otyp == MANFOOD || m_cansee(mtmp, nx, ny))) {
+                    int aproll = rn2(8);
+                    int carry_res = (edog->apport > aproll)
+                                        ? can_carry(mtmp, obj)
+                                        : 0;
+                    int sel = (edog->apport > aproll && carry_res > 0);
+                    event_log("dog_goal_obj[M%u oid=%u@%d,%d food=%d gtyp=%d apport=%u rn2_8=%d carry=%d sel=%d]",
+                              mtmp->m_id, obj->o_id, nx, ny, otyp, gg.gtyp,
+                              edog->apport, aproll, carry_res, sel);
+                    if (sel) {
+                        gg.gx = nx;
+                        gg.gy = ny;
+                        gg.gtyp = APPORT;
+                    }
+                } else {
+                    event_log("dog_goal_obj[M%u oid=%u@%d,%d food=%d gtyp=%d skip=apc]",
+                              mtmp->m_id, obj->o_id, nx, ny, otyp, gg.gtyp);
                 }
             }
         }
@@ -644,6 +697,8 @@ dog_goal(
     } else if (edog) {
         edog->ogoal.x = 0;
     }
+    event_log("dog_goal_end[M%u goal=%d,%d gtyp=%d appr=%d]",
+              mtmp->m_id, gg.gx, gg.gy, gg.gtyp, appr);
     return appr;
 #undef FARAWAY
 }
@@ -981,7 +1036,7 @@ dog_move(
     int after) /* this is extra fast monster movement */
 {
     int omx, omy; /* original mtmp position */
-    int appr, whappr, udist;
+    int appr = 0, whappr, udist; /* appr init: dog_move_choice event fires via goto newdogpos */
     int i, j, k;
     struct edog *edog = (mtmp->mtame && has_edog(mtmp)) ? EDOG(mtmp) : 0;
     struct obj *obj = (struct obj *) 0;
@@ -990,7 +1045,7 @@ dog_move(
     boolean better_with_displacing = FALSE, ranged_only;
     coordxy nix, niy;      /* position mtmp is (considering) moving to */
     coordxy nx, ny; /* temporary coordinates */
-    xint16 cnt, uncursedcnt, chcnt;
+    xint16 cnt = 0, uncursedcnt, chcnt; /* cnt init: dog_move_choice event fires via goto newdogpos */
     int chi = -1, nidist, ndist;
     long allowflags;
     struct mfndposdata mfp;
@@ -1044,6 +1099,9 @@ dog_move(
     appr = dog_goal(mtmp, edog, after, udist, whappr);
     if (appr == -2)
         return MMOVE_NOTHING;
+    event_log("dog_move_entry[%s goal=%d,%d appr=%d udist=%d]",
+              event_mon_ref(mtmp, monsndx(mtmp->data), omx, omy),
+              gg.gx, gg.gy, appr, udist);
 
     if (Conflict && !resist_conflict(mtmp)) {
         if (!edog) {
@@ -1063,6 +1121,8 @@ dog_move(
 #endif
     allowflags = mon_allowflags(mtmp);
     cnt = mfndpos(mtmp, &mfp, allowflags);
+
+    event_log("dog_move_mfndpos[cnt=%d flags=0x%lx]", cnt, allowflags);
 
     /* Normally dogs don't step on cursed items, but if they have no
      * other choice they will.  This requires checking ahead of time
@@ -1276,7 +1336,15 @@ dog_move(
         return i;
 
  newdogpos:
+    event_log("dog_move_choice[%s pick=%d,%d chi=%d do_eat=%d cnt=%d appr=%d]",
+              event_mon_ref(mtmp, monsndx(mtmp->data), omx, omy), nix, niy,
+              chi,
+              do_eat ? 1 : 0, cnt, appr);
+
     if (nix != omx || niy != omy) {
+        event_log("dog_move_exit[%s->%d,%d chi=%d do_eat=%d]",
+                  event_mon_ref(mtmp, monsndx(mtmp->data), omx, omy), nix,
+                  niy, chi, do_eat);
         boolean wasseen;
 
         if (mfp.info[chi] & ALLOW_U) {

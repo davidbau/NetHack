@@ -1329,7 +1329,7 @@ Mb_hit(struct monst *magr, /* attacker */
                     u.uenmax--;
                     if (u.uen > 0)
                         u.uen--;
-                    disp.botl = TRUE;
+                    SET_BOTL();
                     You("lose magical energy!");
                 }
             } else {
@@ -1344,7 +1344,7 @@ Mb_hit(struct monst *magr, /* attacker */
                     if (u.uenmax > u.uenpeak)
                         u.uenpeak = u.uenmax;
                     u.uen++;
-                    disp.botl = TRUE;
+                    SET_BOTL();
                     You("absorb magical energy!");
                 }
             }
@@ -1810,7 +1810,7 @@ invoke_healing(struct obj *obj)
         make_slimed(0L, (char *) 0);
     if (BlindedTimeout > creamed)
         make_blinded(creamed, FALSE);
-    disp.botl = TRUE;
+    SET_BOTL();
     return ECMD_TIME;
 }
 
@@ -1825,7 +1825,7 @@ invoke_energy_boost(struct obj *obj)
         epboost = u.uenmax - u.uen;
     if (epboost) {
         u.uen += epboost;
-        disp.botl = TRUE;
+        SET_BOTL();
         You_feel("re-energized.");
     } else {
         nothing_special(obj);
@@ -2119,7 +2119,7 @@ arti_invoke_cost(struct obj *obj)
             /* you pay invoke cost with your own magic */
             You_feel("drained...");
             u.uen -= pw_cost;
-            disp.botl = TRUE;
+            SET_BOTL();
         }
     } else {
         obj->age = svm.moves + rnz(100);

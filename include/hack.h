@@ -1632,6 +1632,167 @@ typedef uint32_t mmflags_nht;     /* makemon MM_ flags */
                 : rnz(x))
 #endif /* RNGLOG_IN_RND_C */
 
+/*
+ * Mid-level function tracing macros (009-midlog-infrastructure patch).
+ *
+ * These wrap calls to key functions with >entry/<exit log lines,
+ * interleaved with the RNG log.  Uses the same C99 self-reference
+ * trick as the RNG macros: the macro name found during its own
+ * expansion resolves to the real function.
+ *
+ * Each source file defining traced functions suppresses its own
+ * macros via MIDLOG_IN_xxx_C (analogous to RNGLOG_IN_RND_C).
+ */
+static inline int
+midlog_wrap_int(const char *fn, int r, const char *f, int l, const char *c)
+{
+    midlog_exit_int(fn, r, f, l, c);
+    return r;
+}
+
+static inline void *
+midlog_wrap_ptr(const char *fn, void *r, const char *f, int l, const char *c)
+{
+    midlog_exit_ptr(fn, r, f, l, c);
+    return r;
+}
+
+/* Bool-returning: somexy, somexyspace */
+#ifndef MIDLOG_IN_MKROOM_C
+#define somexy(a,b) \
+    (midlog_enter("somexy", __FILE__, __LINE__, __func__), \
+     midlog_wrap_int("somexy", somexy(a,b), __FILE__, __LINE__, __func__))
+#define somexyspace(a,b) \
+    (midlog_enter("somexyspace", __FILE__, __LINE__, __func__), \
+     midlog_wrap_int("somexyspace", somexyspace(a,b), __FILE__, __LINE__, __func__))
+#endif
+
+/* Int-returning: rndmonnum */
+#ifndef MIDLOG_IN_MKOBJ_C
+#define rndmonnum() \
+    (midlog_enter("rndmonnum", __FILE__, __LINE__, __func__), \
+     midlog_wrap_int("rndmonnum", rndmonnum(), __FILE__, __LINE__, __func__))
+#endif
+
+/* Int-returning: dochug, m_move */
+#ifndef MIDLOG_IN_MONMOVE_C
+#define dochug(a) \
+    (midlog_enter("dochug", __FILE__, __LINE__, __func__), \
+     midlog_wrap_int("dochug", dochug(a), __FILE__, __LINE__, __func__))
+#define m_move(a,b) \
+    (midlog_enter("m_move", __FILE__, __LINE__, __func__), \
+     midlog_wrap_int("m_move", m_move(a,b), __FILE__, __LINE__, __func__))
+#endif
+
+/* Int-returning: dog_move */
+#ifndef MIDLOG_IN_DOGMOVE_C
+#define dog_move(a,b) \
+    (midlog_enter("dog_move", __FILE__, __LINE__, __func__), \
+     midlog_wrap_int("dog_move", dog_move(a,b), __FILE__, __LINE__, __func__))
+#endif
+
+/* Int-returning: mattacku */
+#ifndef MIDLOG_IN_MHITU_C
+#define mattacku(a) \
+    (midlog_enter("mattacku", __FILE__, __LINE__, __func__), \
+     midlog_wrap_int("mattacku", mattacku(a), __FILE__, __LINE__, __func__))
+#endif
+
+/* Int-returning: thitu */
+#ifndef MIDLOG_IN_MTHROWU_C
+#define thitu(a,b,c,d) \
+    (midlog_enter("thitu", __FILE__, __LINE__, __func__), \
+     midlog_wrap_int("thitu", thitu(a,b,c,d), __FILE__, __LINE__, __func__))
+#endif
+
+/* Int-returning: dosearch0 */
+#ifndef MIDLOG_IN_DETECT_C
+#define dosearch0(a) \
+    (midlog_enter("dosearch0", __FILE__, __LINE__, __func__), \
+     midlog_wrap_int("dosearch0", dosearch0(a), __FILE__, __LINE__, __func__))
+#endif
+
+/* Int-returning: mfndpos */
+#ifndef MIDLOG_IN_MON_C
+#define mfndpos(a,b,c) \
+    (midlog_enter("mfndpos", __FILE__, __LINE__, __func__), \
+     midlog_wrap_int("mfndpos", mfndpos(a,b,c), __FILE__, __LINE__, __func__))
+#endif
+
+/* Int-returning: monster_nearby; void-returning: runmode_delay_output */
+#ifndef MIDLOG_IN_HACK_C
+#define monster_nearby() \
+    (midlog_enter("monster_nearby", __FILE__, __LINE__, __func__), \
+     midlog_wrap_int("monster_nearby", monster_nearby(), __FILE__, __LINE__, __func__))
+#define runmode_delay_output() \
+    (midlog_enter("runmode_delay_output", __FILE__, __LINE__, __func__), \
+     runmode_delay_output(), \
+     midlog_exit_void("runmode_delay_output", __FILE__, __LINE__, __func__))
+#endif
+
+/* Void-returning: bot (status line update -- traces caller context) */
+#ifndef MIDLOG_IN_BOTL_C
+#define bot() \
+    (midlog_enter("bot", __FILE__, __LINE__, __func__), \
+     bot(), \
+     midlog_exit_void("bot", __FILE__, __LINE__, __func__))
+#endif
+
+/* Status flag tracing */
+#define SET_BOTL() (event_log("botl[%s]", __func__), disp.botl = TRUE)
+#define SET_BOTLX() (event_log("botlx[%s]", __func__), disp.botlx = TRUE)
+#define SET_TIME_BOTL() (event_log("time_botl[%s]", __func__), disp.time_botl = TRUE)
+
+/* pline and variant midlog macros */
+#ifndef MIDLOG_IN_PLINE_C
+#define pline(...) (midlog_enter("pline", __FILE__, __LINE__, __func__), pline(__VA_ARGS__), midlog_exit_void("pline", __FILE__, __LINE__, __func__))
+#define You(...) (midlog_enter("pline", __FILE__, __LINE__, __func__), You(__VA_ARGS__), midlog_exit_void("pline", __FILE__, __LINE__, __func__))
+#define Your(...) (midlog_enter("pline", __FILE__, __LINE__, __func__), Your(__VA_ARGS__), midlog_exit_void("pline", __FILE__, __LINE__, __func__))
+#define You_feel(...) (midlog_enter("pline", __FILE__, __LINE__, __func__), You_feel(__VA_ARGS__), midlog_exit_void("pline", __FILE__, __LINE__, __func__))
+#define You_hear(...) (midlog_enter("pline", __FILE__, __LINE__, __func__), You_hear(__VA_ARGS__), midlog_exit_void("pline", __FILE__, __LINE__, __func__))
+#define You_see(...) (midlog_enter("pline", __FILE__, __LINE__, __func__), You_see(__VA_ARGS__), midlog_exit_void("pline", __FILE__, __LINE__, __func__))
+#define pline_The(...) (midlog_enter("pline", __FILE__, __LINE__, __func__), pline_The(__VA_ARGS__), midlog_exit_void("pline", __FILE__, __LINE__, __func__))
+#define pline_mon(mtmp, ...) (midlog_enter("pline", __FILE__, __LINE__, __func__), pline_mon(mtmp, __VA_ARGS__), midlog_exit_void("pline", __FILE__, __LINE__, __func__))
+#define pline_dir(dir, ...) (midlog_enter("pline", __FILE__, __LINE__, __func__), pline_dir(dir, __VA_ARGS__), midlog_exit_void("pline", __FILE__, __LINE__, __func__))
+#define pline_xy(x, y, ...) (midlog_enter("pline", __FILE__, __LINE__, __func__), pline_xy(x, y, __VA_ARGS__), midlog_exit_void("pline", __FILE__, __LINE__, __func__))
+#define midlog_pline_funcptr(func, ...) (midlog_enter("pline", __FILE__, __LINE__, __func__), (*(func))(__VA_ARGS__), midlog_exit_void("pline", __FILE__, __LINE__, __func__))
+#endif
+
+/* Pointer-returning: makemon */
+#ifndef MIDLOG_IN_MAKEMON_C
+#define makemon(a,b,c,d) \
+    ((struct monst *)midlog_wrap_ptr("makemon", \
+     (midlog_enter("makemon", __FILE__, __LINE__, __func__), makemon(a,b,c,d)), \
+     __FILE__, __LINE__, __func__))
+#endif
+
+/* Pointer-returning: mksobj; also in mkobj.c with rndmonnum */
+#ifndef MIDLOG_IN_MKOBJ_C
+#define mksobj(a,b,c) \
+    ((struct obj *)midlog_wrap_ptr("mksobj", \
+     (midlog_enter("mksobj", __FILE__, __LINE__, __func__), mksobj(a,b,c)), \
+     __FILE__, __LINE__, __func__))
+#endif
+
+/* Bool-returning: create_room; void-returning: wallify_map */
+#ifndef MIDLOG_IN_SP_LEV_C
+#define create_room(a,b,c,d,e,f,g,h) \
+    (midlog_enter("create_room", __FILE__, __LINE__, __func__), \
+     midlog_wrap_int("create_room", create_room(a,b,c,d,e,f,g,h), __FILE__, __LINE__, __func__))
+#define wallify_map(a,b,c,d) \
+    (midlog_enter("wallify_map", __FILE__, __LINE__, __func__), \
+     wallify_map(a,b,c,d), \
+     midlog_exit_void("wallify_map", __FILE__, __LINE__, __func__))
+#endif
+
+/* Void-returning: mktrap */
+#ifndef MIDLOG_IN_MKLEV_C
+#define mktrap(a,b,c,d) \
+    (midlog_enter("mktrap", __FILE__, __LINE__, __func__), \
+     mktrap(a,b,c,d), \
+     midlog_exit_void("mktrap", __FILE__, __LINE__, __func__))
+#endif
+
 #endif  /* RECOVER_C */
 
 #endif /* HACK_H */

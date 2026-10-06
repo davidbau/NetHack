@@ -652,6 +652,7 @@ pick_lock(
         }
     }
     svc.context.move = 0;
+    event_log("ctx_move[%s=%d umv=%d]", __func__, (int)svc.context.move, u.umovement);
     gx.xlock.chance = ch;
     gx.xlock.picktyp = picktyp;
     gx.xlock.magic_key = is_magic_key(&gy.youmonst, pick);

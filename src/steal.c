@@ -111,7 +111,7 @@ stealgold(struct monst *mtmp)
         if (!tele_restrict(mtmp))
             (void) rloc(mtmp, RLOC_MSG);
         monflee(mtmp, 0, FALSE, FALSE);
-        disp.botl = TRUE;
+        SET_BOTL();
     }
 }
 
@@ -630,6 +630,9 @@ mpickobj(struct monst *mtmp, struct obj *otmp)
                    (otmp == uchain) ? "chain" : "ball", simpleonames(otmp));
         return 0;
     }
+    event_log("pickup[%s,%d]",
+              event_mon_ref(mtmp, monsndx(mtmp->data), mtmp->mx, mtmp->my),
+              otmp->otyp);
     /* if monster is acquiring a thrown or kicked object, the throwing
        or kicking code shouldn't continue to track and place it */
     if (otmp == gt.thrownobj)
@@ -841,6 +844,8 @@ mdrop_obj(
     if (!flooreffects(obj, omx, omy, "fall")) {
         place_object(obj, omx, omy);
         stackobj(obj);
+        event_log("drop[%s,%d]",
+                  event_mon_ref(mon, monsndx(mon->data), omx, omy), obj->otyp);
     } else {
         obj = &objcopy;
     }

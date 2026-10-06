@@ -719,7 +719,7 @@ do_improvisation(struct obj *instr)
             Hero_playnotes(obj_to_instr(&itmp), improvisation, 50);
         }
         awaken_monsters(u.ulevel * (mundane ? 5 : 40));
-        disp.botl = TRUE;
+        SET_BOTL();
         break;
     default:
         impossible("What a weird instrument (%d)!", instr->otyp);

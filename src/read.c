@@ -1809,7 +1809,7 @@ seffect_charging(struct obj **sobjp)
             else
                 u.uen = u.uenmax; /* otherwise restore current to max  */
         }
-        disp.botl = TRUE;
+        SET_BOTL();
         return;
     }
     /* known = TRUE; -- handled inline here */

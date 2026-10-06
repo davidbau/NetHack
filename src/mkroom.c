@@ -15,6 +15,7 @@
  *      cmap_to_type() -- convert S_xxx symbol to XXX topology code
  */
 
+#define MIDLOG_IN_MKROOM_C
 #include "hack.h"
 
 #ifndef SFCTOOL

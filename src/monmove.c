@@ -3,6 +3,7 @@
 /*-Copyright (c) Michael Allison, 2006. */
 /* NetHack may be freely redistributed.  See license for details. */
 
+#define MIDLOG_IN_MONMOVE_C
 #include "hack.h"
 #include "mfndpos.h"
 #include "artifact.h"
@@ -536,6 +537,7 @@ distfleeck(
 {
     int seescaryx, seescaryy;
     boolean sawscary = FALSE, bravegremlin = (rn2(5) == 0);
+    boolean fleelight = FALSE, sanctuary = FALSE;
 
     *inrange = (dist2(mtmp->mx, mtmp->my, mtmp->mux, mtmp->muy)
                 <= (BOLT_LIM * BOLT_LIM));
@@ -557,13 +559,29 @@ distfleeck(
     }
 
     sawscary = onscary(seescaryx, seescaryy, mtmp);
-    if (*nearby && (sawscary
-                    || (flees_light(mtmp) && !bravegremlin)
-                    || (!mtmp->mpeaceful && in_your_sanctuary(mtmp, 0, 0)))) {
+    if (*nearby) {
+        if (!sawscary) {
+            fleelight = flees_light(mtmp) && !bravegremlin;
+            if (!fleelight)
+                sanctuary = !mtmp->mpeaceful
+                            && in_your_sanctuary(mtmp, 0, 0);
+        }
+    }
+    if (*nearby && (sawscary || fleelight || sanctuary)) {
         *scared = 1;
         monflee(mtmp, rnd(rn2(7) ? 10 : 100), TRUE, TRUE);
     } else
         *scared = 0;
+
+    event_log("distfleeck[%s in=%d near=%d scare=%d brave=%d saw=%d light=%d sanct=%d mux=%d muy=%d ux=%d uy=%d see=%d tame=%d conf=%d stun=%d inv=%d]",
+              event_mon_ref(mtmp, monsndx(mtmp->data), mtmp->mx, mtmp->my),
+              *inrange, *nearby,
+              *scared, bravegremlin ? 1 : 0, sawscary ? 1 : 0,
+              fleelight ? 1 : 0, sanctuary ? 1 : 0,
+              mtmp->mux, mtmp->muy, u.ux, u.uy,
+              mtmp->mcansee ? 1 : 0, mtmp->mtame,
+              mtmp->mconf ? 1 : 0, mtmp->mstun ? 1 : 0,
+              mtmp->minvis ? 1 : 0);
 }
 
 #undef flees_light
@@ -657,6 +675,10 @@ m_everyturn_effect(struct monst *mtmp)
         /* don't leave a vapor cloud if some other gas cloud is already
            present, or when flowing under closed doors so that visibility
            changes aren't mixed with messages about doing such */
+        event_log("fog_everyturn[%d@%d,%d cd=%d vr=%d]",
+                  monsndx(mtmp->data), x, y,
+                  closed_door(x, y) ? 1 : 0,
+                  visible_region_at(x, y) ? 1 : 0);
         if (!closed_door(x, y) && !visible_region_at(x, y))
             create_gas_cloud(x, y, 1, 0); /* harmless vapor */
     }
@@ -907,8 +929,12 @@ dochug(struct monst *mtmp)
             }
         }
 
-        if (!status)
+        if (!status) {
+            midlog_enter("m_move", __FILE__, __LINE__, __func__);
             status = m_move(mtmp, 0);
+            midlog_exit_int("m_move", status,
+                            __FILE__, __LINE__, __func__);
+        }
         if (mon_offmap(mtmp))
             return 1;
         if (status != MMOVE_DIED)

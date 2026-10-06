@@ -1187,7 +1187,7 @@ use_pick_axe2(struct obj *obj)
         You("hit yourself with %s.", yname(uwep));
         Sprintf(buf, "%s own %s", uhis(), OBJ_NAME(objects[obj->otyp]));
         losehp(Maybe_Half_Phys(dam), buf, KILLED_BY);
-        disp.botl = TRUE;
+        SET_BOTL();
         return ECMD_TIME;
     } else if (u.dz == 0) {
         confdir(FALSE);

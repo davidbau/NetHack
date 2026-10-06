@@ -275,6 +275,7 @@ wipe_engr_at(coordxy x, coordxy y, xint16 cnt, boolean magical)
 
     /* Headstones and some specially marked engravings are indelible */
     if (ep && ep->engr_type != HEADSTONE && !ep->nowipeout) {
+        event_log("wipe[%d,%d]", x, y);
         debugpline1("asked to erode %d characters", cnt);
         if (ep->engr_type != BURN || is_ice(x, y) || (magical && !rn2(2))) {
             if (ep->engr_type != DUST && ep->engr_type != ENGR_BLOOD) {
@@ -453,6 +454,7 @@ make_engr_at(
     ep->engr_type = (xint8) ((e_type > 0) ? e_type : rnd(N_ENGRAVE - 1));
     ep->engr_szeach = smem;
     ep->engr_alloc = smem * 3;
+    event_log("engr[%d,%d,%d]", ep->engr_type, x, y);
     /* we do not set ep->eread or ep->erevealed;
      * the caller will need to if required */
 }
@@ -1677,6 +1679,7 @@ RESTORE_WARNING_FORMAT_NONLITERAL
 void
 del_engr(struct engr *ep)
 {
+    event_log("dengr[%d,%d]", ep->engr_x, ep->engr_y);
     if (ep == head_engr) {
         head_engr = ep->nxt_engr;
     } else {

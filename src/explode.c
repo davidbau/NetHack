@@ -651,7 +651,7 @@ explode(
                 u.mh -= damu;
             else
                 u.uhp -= damu;
-            disp.botl = TRUE;
+            SET_BOTL();
         }
 
         /* You resisted the damage, lets not keep that to ourselves */

@@ -3,6 +3,7 @@
 /*-Copyright (c) Derek S. Ray, 2015. */
 /* NetHack may be freely redistributed.  See license for details. */
 
+#define MIDLOG_IN_MON_C
 #include "hack.h"
 #include "mfndpos.h"
 
@@ -1256,6 +1257,12 @@ movemon_singlemon(struct monst *mtmp)
     if (mtmp->movement < NORMAL_SPEED)
         return FALSE;
 
+    event_log("movemon_turn[%s mv=%d->%d see=%d tame=%d conf=%d stun=%d inv=%d mux=%d muy=%d]",
+              event_mon_ref(mtmp, monsndx(mtmp->data), mtmp->mx, mtmp->my),
+              mtmp->movement, mtmp->movement - NORMAL_SPEED,
+              mtmp->mcansee ? 1 : 0, mtmp->mtame,
+              mtmp->mconf ? 1 : 0, mtmp->mstun ? 1 : 0,
+              mtmp->minvis ? 1 : 0, mtmp->mux, mtmp->muy);
     mtmp->movement -= NORMAL_SPEED;
     if (mtmp->movement >= NORMAL_SPEED)
         gs.somebody_can_move = TRUE;
@@ -3147,6 +3154,7 @@ mondead(struct monst *mtmp)
     mndx = monsndx(mtmp->data);
     if (svm.mvitals[mndx].died < 255)
         svm.mvitals[mndx].died++;
+    event_log("die[%s]", event_mon_ref(mtmp, mndx, mtmp->mx, mtmp->my));
 
     /* if it's a (possibly polymorphed) quest leader, mark him as dead */
     if (mtmp->m_id == svq.quest_status.leader_m_id)
@@ -3439,7 +3447,7 @@ set_ustuck(struct monst *mtmp)
                        mon_nam(mtmp), mdistu(mtmp));
     }
 
-    disp.botl = TRUE;
+    SET_BOTL();
     u.ustuck = mtmp;
     if (u.ustuck_mid)
         u.ustuck_mid = 0;

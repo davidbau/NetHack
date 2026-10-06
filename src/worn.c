@@ -139,7 +139,7 @@ setworn(struct obj *obj, long mask)
     }
     if ((flags.weaponstatus && (mask & W_WEP) != 0L)
         || (flags.armorstatus && (mask & W_ARMOR) != 0L))
-        disp.botl = TRUE;
+        SET_BOTL();
     update_inventory();
     recalc_telepat_range();
 }
@@ -178,7 +178,7 @@ setnotworn(struct obj *obj)
         iflags.tux_penalty = FALSE;
     if ((flags.weaponstatus && (unworn & W_WEP) != 0L)
         || (flags.armorstatus && (unworn & W_ARMOR) != 0L))
-        disp.botl = TRUE;
+        SET_BOTL();
     update_inventory();
     recalc_telepat_range();
 }

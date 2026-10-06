@@ -2,6 +2,7 @@
 /*      Copyright (c) 1989 by Jean-Christophe Collet */
 /* NetHack may be freely redistributed.  See license for details. */
 
+#define MIDLOG_IN_SP_LEV_C
 /*
  * This file contains the various functions that are related to the special
  * levels.
@@ -2575,7 +2576,9 @@ dig_corridor(
     int dx = 0, dy = 0, dix, diy, cct;
     struct rm *crm;
     int tx, ty, xx, yy;
+    boolean result = FALSE;
 
+    midlog_enter("dig_corridor", __FILE__, __LINE__, __func__);
     if (npoints)
         *npoints = 0;
     xx = org->x;
@@ -2586,7 +2589,7 @@ dig_corridor(
         || tx > COLNO - 1 || yy > ROWNO - 1 || ty > ROWNO - 1) {
         debugpline4("dig_corridor: bad coords <%d,%d> <%d,%d>.",
                     xx, yy, tx, ty);
-        return FALSE;
+        goto dig_done;
     }
     if (tx > xx)
         dx = 1;
@@ -2603,13 +2606,13 @@ dig_corridor(
     while (xx != tx || yy != ty) {
         /* loop: dig corridor at [xx,yy] and find new [xx,yy] */
         if (cct++ > 500 || (nxcor && !rn2(35)))
-            return FALSE;
+            goto dig_done;
 
         xx += dx;
         yy += dy;
 
         if (xx >= COLNO - 1 || xx <= 0 || yy <= 0 || yy >= ROWNO - 1)
-            return FALSE; /* impossible */
+            goto dig_done; /* impossible */
 
         crm = &levl[xx][yy];
         if (crm->typ == btyp) {
@@ -2626,7 +2629,7 @@ dig_corridor(
             }
         } else if (crm->typ != ftyp && crm->typ != SCORR) {
             /* strange ... */
-            return FALSE;
+            goto dig_done;
         }
 
         /* find next corridor position */
@@ -2679,7 +2682,10 @@ dig_corridor(
         dy = -dy;
         dx = -dx;
     }
-    return TRUE;
+    result = TRUE;
+dig_done:
+    midlog_exit_int("dig_corridor", result, __FILE__, __LINE__, __func__);
+    return result;
 }
 
 /*

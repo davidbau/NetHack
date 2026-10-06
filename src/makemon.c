@@ -3,6 +3,7 @@
 /*-Copyright (c) Robert Patrick Rankin, 2012. */
 /* NetHack may be freely redistributed.  See license for details. */
 
+#define MIDLOG_IN_MAKEMON_C
 #include "hack.h"
 
 /* this assumes that a human quest leader or nemesis is an archetype
@@ -1093,6 +1094,11 @@ makemon_rnd_goodpos(
                                               : goodpos(nx, ny, mon, gpflags);
     } while ((++tryct < 50) && !good);
 
+    /* Per-call tracing so cross-engine position-selection divergences
+     * are visible in the event stream. Parity with JS's instrumentation. */
+    event_log("mk_rnd_goodpos[try=%d good=%d pos=%d,%d mklev=%d]",
+              tryct, good ? 1 : 0, nx, ny, gi.in_mklev ? 1 : 0);
+
     if (!good) {
         /* else go through all map positions, twice, first round
            ignoring positions in sight, and pick first good one.
@@ -1111,8 +1117,10 @@ makemon_rnd_goodpos(
                     ny = ((dy + yofs) % (ROWNO - 1)) + 1;
                     if (bl == 0 && cansee(nx,ny))
                         continue;
-                    if (goodpos(nx, ny, mon, gpflags))
+                    if (goodpos(nx, ny, mon, gpflags)) {
+                        event_log("mk_rnd_goodpos_scan[bl=%d pos=%d,%d]", bl, nx, ny);
                         goto gotgood;
+                    }
                 }
             if (bl == 0 && (!mon || mon->data->mmove)) {
                 stairway *stway = gs.stairs;
@@ -1126,8 +1134,10 @@ makemon_rnd_goodpos(
                     }
                     stway = stway->next;
                 }
-                if (goodpos(nx, ny, mon, gpflags))
+                if (goodpos(nx, ny, mon, gpflags)) {
+                    event_log("mk_rnd_goodpos_stairs[pos=%d,%d]", nx, ny);
                     goto gotgood;
+                }
             }
         }
     } else {
@@ -1136,6 +1146,7 @@ makemon_rnd_goodpos(
         cc->y = ny;
         return TRUE;
     }
+    event_log("mk_rnd_goodpos_fail[]");
     return FALSE;
 }
 
@@ -1509,6 +1520,7 @@ makemon(
         /* TODO: unify with teleport appears msg */
     }
 
+    event_log("makemon[%s]", event_mon_ref(mtmp, mndx, mtmp->mx, mtmp->my));
     return mtmp;
 }
 

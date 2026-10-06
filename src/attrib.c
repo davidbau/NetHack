@@ -190,7 +190,7 @@ adjattrib(
     /* Any successful change also resets abuse / exercise level */
     AEXE(ndx) = 0;
 
-    disp.botl = TRUE;
+    SET_BOTL();
     if (msgflg <= 0)
         You_feel("%s%s!", (incr > 1 || incr < -1) ? "very " : "", attrstr);
     if (program_state.in_moveloop && (ndx == A_STR || ndx == A_CON))
@@ -252,7 +252,7 @@ losestr(int num, const char *knam, schar k_format)
             if (u.uhpmax > uhpmin)
                 setuhpmax(max(u.uhpmax - dmg, uhpmin), FALSE);
         }
-        disp.botl = TRUE;
+        SET_BOTL();
     }
 #if 0   /* only possible if uhpmax was already less than uhpmin */
     if (!Upolyd && u.uhpmax < uhpmin) {
@@ -309,7 +309,7 @@ poisontell(int typ,         /* which attribute */
     else if (typ == A_CON && ACURR(A_CON) == 25)
         msg_txt = "sick inside";
 
-    (*func)("%s%c", msg_txt, exclaim ? '!' : '.');
+    midlog_pline_funcptr(func, "%s%c", msg_txt, exclaim ? '!' : '.');
 }
 
 /* called when an attack or trap has poisoned hero (used to be in mon.c) */
@@ -365,7 +365,7 @@ poisoned(
         loss = 6 + d(4, 6); /* 6 + 4d6 => 10..34 */
         if (u.uhp <= loss) {
             u.uhp = -1;
-            disp.botl = TRUE;
+            SET_BOTL();
             pline_The("poison was deadly...");
         } else {
             /* survived, but with severe reaction */
@@ -473,7 +473,7 @@ restore_attrib(void)
         if (ATEMP(i) != equilibrium && ATIME(i) != 0) {
             if (!(--(ATIME(i)))) { /* countdown for change */
                 ATEMP(i) += (ATEMP(i) > 0) ? -1 : 1;
-                disp.botl = TRUE;
+                SET_BOTL();
                 if (ATEMP(i)) /* reset timer */
                     ATIME(i) = 100 / ACURR(A_CON);
             }
@@ -730,10 +730,14 @@ init_attr(int np)
         np -= gu.urole.attrbase[i];
     }
 
+    event_log("attr_base[%d,%d,%d,%d,%d,%d]",
+              ABASE(0), ABASE(1), ABASE(2), ABASE(3), ABASE(4), ABASE(5));
     /* distribute leftover points */
     np = init_attr_role_redist(np, TRUE);
     /* if we went over, remove points */
     np = init_attr_role_redist(np, FALSE);
+    event_log("attr_redist[%d,%d,%d,%d,%d,%d]",
+              ABASE(0), ABASE(1), ABASE(2), ABASE(3), ABASE(4), ABASE(5));
 }
 
 void
@@ -773,6 +777,8 @@ vary_init_attr(void)
             if (ABASE(i) < AMAX(i))
                 AMAX(i) = ABASE(i);
         }
+    event_log("attr_vary[%d,%d,%d,%d,%d,%d]",
+              ABASE(0), ABASE(1), ABASE(2), ABASE(3), ABASE(4), ABASE(5));
 }
 
 staticfn
@@ -1161,17 +1167,17 @@ setuhpmax(int newmax, boolean even_when_polyd)
             u.uhpmax = newmax;
             if (u.uhpmax > u.uhppeak)
                 u.uhppeak = u.uhpmax;
-            disp.botl = TRUE;
+            SET_BOTL();
         }
         if (u.uhp > u.uhpmax)
-            u.uhp = u.uhpmax, disp.botl = TRUE;
+            u.uhp = u.uhpmax, SET_BOTL();
     } else { /* Upolyd */
         if (newmax != u.mhmax) {
             u.mhmax = newmax;
-            disp.botl = TRUE;
+            SET_BOTL();
         }
         if (u.mh > u.mhmax)
-            u.mh = u.mhmax, disp.botl = TRUE;
+            u.mh = u.mhmax, SET_BOTL();
     }
 }
 
@@ -1326,7 +1332,7 @@ uchangealign(
     u.ublessed = 0; /* lose divine protection */
     /* You/Your/pline message with call flush_screen(), triggering bot(),
        so the actual data change needs to come before the message */
-    disp.botl = TRUE; /* status line needs updating */
+    SET_BOTL(); /* status line needs updating */
     if (reason == A_CG_CONVERT) {
         /* conversion via altar */
         livelog_printf(LL_ALIGNMENT, "permanently converted to %s",

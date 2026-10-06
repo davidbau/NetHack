@@ -1138,7 +1138,7 @@ dotele(
         } else {
             /* bypassing spelleffects(); apply energy cost directly */
             u.uen -= energy;
-            disp.botl = TRUE;
+            SET_BOTL();
         }
     }
 

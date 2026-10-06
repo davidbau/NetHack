@@ -3,6 +3,7 @@
 /*-Copyright (c) Derek S. Ray, 2015. */
 /* NetHack may be freely redistributed.  See license for details. */
 
+#define MIDLOG_IN_MKOBJ_C
 #include "hack.h"
 
 staticfn boolean may_generate_eroded(struct obj *);
@@ -2129,6 +2130,7 @@ mkcorpstat(
             start_corpse_timeout(otmp);
         }
     }
+    event_log("corpse[%d,%d,%d]", otmp->corpsenm, x, y);
     return otmp;
 }
 
@@ -2381,6 +2383,11 @@ place_object(struct obj *otmp, coordxy x, coordxy y)
     fobj = otmp;
     if (otmp->timed)
         obj_timer_checks(otmp, x, y, 0);
+    /* dosave0's copy-other-levels pass (save.c getlev loop) re-places
+       every floor object with program_state.saving set; that is save-file
+       plumbing, not gameplay, so it is not part of the event stream. */
+    if (!program_state.saving)
+        event_log("place[%d,%d,%d]", otmp->otyp, x, y);
 }
 
 /* tear down the object pile at <x,y> and create it again, so that any
@@ -2581,6 +2588,7 @@ obj_extract_self(struct obj *obj)
         break;
     case OBJ_FLOOR:
         remove_object(obj);
+        event_log("remove[%d,%d,%d]", obj->otyp, obj->ox, obj->oy);
         break;
     case OBJ_CONTAINED:
         extract_nobj(obj, &obj->ocontainer->cobj);

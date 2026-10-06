@@ -3,6 +3,7 @@
 /*-Copyright (c) Alex Smith, 2017. */
 /* NetHack may be freely redistributed.  See license for details. */
 
+#define MIDLOG_IN_MKLEV_C
 #include "hack.h"
 
 /* for UNIX, Rand #def'd to (long)lrand48() or (long)random() */
@@ -444,53 +445,56 @@ join(int a, int b, boolean nxcor)
     int dx, dy;
     int npoints;
     boolean dig_result;
+    boolean entered = FALSE;
 
+    midlog_enter("join", __FILE__, __LINE__, __func__);
+    entered = TRUE;
     croom = &svr.rooms[a];
     troom = &svr.rooms[b];
 
     if (!croom->needjoining || !troom->needjoining)
-        return;
+        goto join_done;
 
     /* find positions cc and tt for doors in croom and troom
        and direction for a corridor between them */
 
     if (troom->hx < 0 || croom->hx < 0)
-        return;
+        goto join_done;
     if (troom->lx > croom->hx) {
         dx = 1;
         dy = 0;
         if (!finddpos(&cc, DIR_E, croom))
-            return;
+            goto join_done;
         if (!finddpos(&tt, DIR_W, troom))
-            return;
+            goto join_done;
     } else if (troom->hy < croom->ly) {
         dy = -1;
         dx = 0;
         if (!finddpos(&cc, DIR_N, croom))
-            return;
+            goto join_done;
         if (!finddpos(&tt, DIR_S, troom))
-            return;
+            goto join_done;
     } else if (troom->hx < croom->lx) {
         dx = -1;
         dy = 0;
         if (!finddpos(&cc, DIR_W, croom))
-            return;
+            goto join_done;
         if (!finddpos(&tt, DIR_E, troom))
-            return;
+            goto join_done;
     } else {
         dy = 1;
         dx = 0;
         if (!finddpos(&cc, DIR_S, croom))
-            return;
+            goto join_done;
         if (!finddpos(&tt, DIR_N, troom))
-            return;
+            goto join_done;
     }
     xx = cc.x;
     yy = cc.y;
     tx = tt.x - dx;
     ty = tt.y - dy;
     if (nxcor && levl[xx + dx][yy + dy].typ != STONE)
-        return;
+        goto join_done;
 
     org.x = xx + dx;
     org.y = yy + dy;
@@ -505,7 +509,7 @@ join(int a, int b, boolean nxcor)
         dodoor(xx, yy, croom);
 
     if (!dig_result)
-        return;
+        goto join_done;
 
     /* we succeeded in digging the corridor */
     if (okdoor(tt.x, tt.y) || !nxcor)
@@ -515,6 +519,9 @@ join(int a, int b, boolean nxcor)
         gs.smeq[b] = gs.smeq[a];
     else
         gs.smeq[a] = gs.smeq[b];
+join_done:
+    if (entered)
+        midlog_exit_void("join", __FILE__, __LINE__, __func__);
 }
 
 /* create random corridors between rooms */

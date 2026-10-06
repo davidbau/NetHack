@@ -3,6 +3,7 @@
 /*-Copyright (c) Michael Allison, 2009. */
 /* NetHack may be freely redistributed.  See license for details. */
 
+#define MIDLOG_IN_TOPL_C
 #include "hack.h"
 
 #ifdef TTY_GRAPHICS
@@ -136,6 +137,7 @@ redotoplin(const char *str)
     putsyms(str);
     cl_end();
     ttyDisplay->toplin = TOPLINE_NEED_MORE;
+    event_log("toplin[%s=%d]", __func__, (int)ttyDisplay->toplin);
     if (ttyDisplay->cury && otoplin != TOPLINE_SPECIAL_PROMPT)
         more();
 }
@@ -160,8 +162,10 @@ show_topl(const char *str)
         cl_end();
         addtopl(str);
 
-        if (ttyDisplay->cury && ttyDisplay->toplin != TOPLINE_SPECIAL_PROMPT)
+        if (ttyDisplay->cury && ttyDisplay->toplin != TOPLINE_SPECIAL_PROMPT) {
             ttyDisplay->toplin = TOPLINE_NON_EMPTY;
+            event_log("toplin[%s=%d]", __func__, (int)ttyDisplay->toplin);
+        }
     }
 }
 
@@ -199,19 +203,25 @@ addtopl(const char *s)
     putsyms(s);
     cl_end();
     ttyDisplay->toplin = TOPLINE_NEED_MORE;
+    event_log("toplin[%s=%d]", __func__, (int)ttyDisplay->toplin);
 }
 
 void
 more(void)
 {
+    midlog_enter("more", __FILE__, __LINE__, __func__);
     struct WinDesc *cw = wins[WIN_MESSAGE];
 
-    if (iflags.debug_fuzzer)
+    if (iflags.debug_fuzzer) {
+        midlog_exit_void("more", __FILE__, __LINE__, __func__);
         return;
+    }
 
     /* avoid recursion -- only happens from interrupts */
-    if (ttyDisplay->inmore)
+    if (ttyDisplay->inmore) {
+        midlog_exit_void("more", __FILE__, __LINE__, __func__);
         return;
+    }
 
     ttyDisplay->inmore++;
 
@@ -244,7 +254,9 @@ more(void)
         cl_end();
     }
     ttyDisplay->toplin = TOPLINE_EMPTY;
+    event_log("toplin[%s=%d]", __func__, (int)ttyDisplay->toplin);
     ttyDisplay->inmore = 0;
+    midlog_exit_void("more", __FILE__, __LINE__, __func__);
 }
 
 void
@@ -408,6 +420,7 @@ tty_yn_function(
         more();
     cw->flags &= ~(WIN_STOP | WIN_NOSTOP);
     ttyDisplay->toplin = TOPLINE_SPECIAL_PROMPT;
+    event_log("toplin[%s=%d]", __func__, (int)ttyDisplay->toplin);
     ttyDisplay->inread++;
     if (resp) {
         char *rb, respbuf[QBUFSZ];
@@ -558,6 +571,7 @@ tty_yn_function(
 #endif
     ttyDisplay->inread--;
     ttyDisplay->toplin = TOPLINE_NON_EMPTY;
+    event_log("toplin[%s=%d]", __func__, (int)ttyDisplay->toplin);
     if (ttyDisplay->intr)
         ttyDisplay->intr--;
     if (wins[WIN_MESSAGE]->cury)
@@ -714,8 +728,10 @@ tty_putmsghistory(const char *msg, boolean restoring_msghist)
            Should we call more?  This can happen when the player has set
            iflags.force_invmenu and they attempt to shoot with nothing in
            the quiver. */
-        if (ttyDisplay && ttyDisplay->toplin == TOPLINE_NEED_MORE)
+        if (ttyDisplay && ttyDisplay->toplin == TOPLINE_NEED_MORE) {
             ttyDisplay->toplin = TOPLINE_NON_EMPTY;
+            event_log("toplin[%s=%d]", __func__, (int)ttyDisplay->toplin);
+        }
 
         /* move most recent message to history, make this become most recent */
         remember_topl();

@@ -171,10 +171,14 @@ doprev_message(void)
 staticfn int
 timed_occupation(void)
 {
+    int result;
+    midlog_enter("timed_occupation", __FILE__, __LINE__, __func__);
     (*timed_occ_fn)();
     if (gm.multi > 0)
         gm.multi--;
-    return gm.multi > 0;
+    result = gm.multi > 0;
+    midlog_exit_int("timed_occupation", result, __FILE__, __LINE__, __func__);
+    return result;
 }
 
 /* If you have moved since initially setting some occupations, they
@@ -205,6 +209,7 @@ reset_occupations(void)
 void
 set_occupation(int (*fn)(void), const char *txt, cmdcount_nht xtime)
 {
+    midlog_enter("set_occupation", __FILE__, __LINE__, __func__);
     if (xtime) {
         go.occupation = timed_occupation;
         timed_occ_fn = fn;
@@ -212,6 +217,7 @@ set_occupation(int (*fn)(void), const char *txt, cmdcount_nht xtime)
         go.occupation = fn;
     go.occtxt = txt;
     go.occtime = 0;
+    midlog_exit_void("set_occupation", __FILE__, __LINE__, __func__);
     return;
 }
 
@@ -3624,8 +3630,10 @@ reset_cmd_vars(boolean reset_cmdq)
     svc.context.run = 0;
     svc.context.nopick = svc.context.forcefight = FALSE;
     svc.context.move = svc.context.mv = FALSE;
+    event_log("ctx_move[%s=%d umv=%d]", __func__, (int)svc.context.move, u.umovement);
     gd.domove_attempting = 0;
     gm.multi = 0;
+    event_log("multi[%s=%d]", __func__, (int)gm.multi);
     iflags.menu_requested = FALSE;
     svc.context.travel = svc.context.travel1 = 0;
     if (gt.travelmap) {
@@ -3806,8 +3814,10 @@ rhack(int key)
                     return;
                 } else if ((gd.domove_attempting & DOMOVE_RUSH) != 0L) {
                     if (firsttime) {
-                        if (!gm.multi)
+                        if (!gm.multi) {
                             gm.multi = max(COLNO, ROWNO);
+                            event_log("multi[%s=%d]", __func__, (int)gm.multi);
+                        }
                         u.last_str_turn = 0;
                     }
                     svc.context.mv = TRUE;
@@ -3833,6 +3843,7 @@ rhack(int key)
                need to change it [back] to True */
             if ((res & ECMD_TIME) != 0) {
                 svc.context.move = TRUE;
+                event_log("ctx_move[%s=%d umv=%d]", __func__, (int)svc.context.move, u.umovement);
                 if (func != dokick) {
                     /* hero did something else than kicking a location;
                        reset the location, so pets don't avoid it */
@@ -3853,7 +3864,9 @@ rhack(int key)
     }
     /* didn't move */
     svc.context.move = FALSE;
+    event_log("ctx_move[%s=%d umv=%d]", __func__, (int)svc.context.move, u.umovement);
     gm.multi = 0;
+    event_log("multi[%s=%d]", __func__, (int)gm.multi);
     return;
 }
 
@@ -5184,6 +5197,7 @@ parse(void)
     }
 
     gm.multi = gc.command_count;
+    event_log("multi[%s=%d]", __func__, (int)gm.multi);
     if (gm.multi)
         gm.multi--;
 
@@ -5411,8 +5425,10 @@ dotravel_target(void)
     svc.context.nopick = 1;
     gd.domove_attempting |= DOMOVE_RUSH;
 
-    if (!gm.multi)
+    if (!gm.multi) {
         gm.multi = max(COLNO, ROWNO);
+        event_log("multi[%s=%d]", __func__, (int)gm.multi);
+    }
     u.last_str_turn = 0;
     svc.context.mv = TRUE;
 
@@ -5428,6 +5444,7 @@ doclicklook(void)
         return ECMD_OK;
 
     svc.context.move = FALSE;
+    event_log("ctx_move[%s=%d umv=%d]", __func__, (int)svc.context.move, u.umovement);
     auto_describe(gc.clicklook_cc.x, gc.clicklook_cc.y);
 
     return ECMD_OK;

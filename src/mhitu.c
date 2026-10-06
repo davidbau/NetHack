@@ -3,6 +3,7 @@
 /*-Copyright (c) Robert Patrick Rankin, 2012. */
 /* NetHack may be freely redistributed.  See license for details. */
 
+#define MIDLOG_IN_MHITU_C
 #include "hack.h"
 #include "artifact.h"
 
@@ -266,7 +267,7 @@ expels(
     struct permonst *mdat, /* if mtmp is polymorphed, mdat != mtmp->data */
     boolean message)
 {
-    disp.botl = TRUE;
+    SET_BOTL();
     if (message) {
         if (digests(mdat)) {
             You("get regurgitated!");
@@ -939,6 +940,7 @@ mattacku(struct monst *mtmp)
         if (sum[i] == M_ATTK_HIT) { /* successful attack */
             if (u.usleep && u.usleep < svm.moves && !rn2(10)) {
                 gm.multi = -1;
+                event_log("multi[%s=%d]", __func__, (int)gm.multi);
                 gn.nomovemsg = "The combat suddenly awakens you.";
             }
         }
@@ -1143,6 +1145,7 @@ magic_negation(struct monst *mon)
 staticfn int
 hitmu(struct monst *mtmp, struct attack *mattk)
 {
+    midlog_enter("hitmu", __FILE__, __LINE__, __func__);
     struct permonst *mdat = mtmp->data;
     struct permonst *olduasmon = gy.youmonst.data;
     int res;
@@ -1194,7 +1197,7 @@ hitmu(struct monst *mtmp, struct attack *mattk)
                            (MON_WEP(mtmp) != 0));
 
     if (mhm.done)
-        return mhm.hitflags;
+        return midlog_wrap_int("hitmu", mhm.hitflags, __FILE__, __LINE__, __func__);
 
     if ((Upolyd ? u.mh : u.uhp) < 1) {
         /* already dead? call rehumanize() or done_in_by() as appropriate */
@@ -1252,7 +1255,7 @@ hitmu(struct monst *mtmp, struct attack *mattk)
                 *hpmax_p = lowerlimit;
             /* else unlikely...
              * already at or below minimum threshold, do nothing to hpmax */
-            disp.botl = TRUE;
+            SET_BOTL();
         }
 
         mdamageu(mtmp, mhm.damage);
@@ -1263,7 +1266,7 @@ hitmu(struct monst *mtmp, struct attack *mattk)
     else
         res = M_ATTK_HIT;
     stop_occupation();
-    return res;
+    return midlog_wrap_int("hitmu", res, __FILE__, __LINE__, __func__);
 }
 
 /* An interface for use when taking a blindfold off, for example,
@@ -1907,7 +1910,7 @@ mdamageu(struct monst *mtmp, int n)
         n = 0;
     }
 
-    disp.botl = TRUE;
+    SET_BOTL();
     if (Upolyd) {
         u.mh -= n;
         showdamage(n);
@@ -2193,13 +2196,13 @@ doseduce(struct monst *mon)
             You("are down in the dumps.");
             (void) adjattrib(A_CON, -1, TRUE);
             exercise(A_CON, FALSE);
-            disp.botl = TRUE;
+            SET_BOTL();
             break;
         case 2:
             Your("senses are dulled.");
             (void) adjattrib(A_WIS, -1, TRUE);
             exercise(A_WIS, FALSE);
-            disp.botl = TRUE;
+            SET_BOTL();
             break;
         case 3:
             if (!resists_drli(&gy.youmonst)) {
@@ -2237,13 +2240,13 @@ doseduce(struct monst *mon)
             You_feel("good enough to do it again.");
             (void) adjattrib(A_CON, 1, TRUE);
             exercise(A_CON, TRUE);
-            disp.botl = TRUE;
+            SET_BOTL();
             break;
         case 2:
             You("will always remember %s...", noit_mon_nam(mon));
             (void) adjattrib(A_WIS, 1, TRUE);
             exercise(A_WIS, TRUE);
-            disp.botl = TRUE;
+            SET_BOTL();
             break;
         case 3:
             pline("That was a very educational experience.");
@@ -2256,7 +2259,7 @@ doseduce(struct monst *mon)
             if (Upolyd)
                 u.mh = u.mhmax;
             exercise(A_STR, TRUE);
-            disp.botl = TRUE;
+            SET_BOTL();
             break;
         }
     }
@@ -2295,7 +2298,7 @@ doseduce(struct monst *mon)
             pline_mon(mon, "%s takes %ld %s for services rendered!",
                       noit_Monnam(mon), cost, currency(cost));
             money2mon(mon, cost);
-            disp.botl = TRUE;
+            SET_BOTL();
         }
     }
     if (!rn2(25))
@@ -2634,7 +2637,7 @@ cloneu(void)
     mon->mhpmax = u.mhmax;
     mon->mhp = u.mh / 2;
     u.mh -= mon->mhp;
-    disp.botl = TRUE;
+    SET_BOTL();
     return mon;
 }
 

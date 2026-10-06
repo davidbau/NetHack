@@ -1,3 +1,4 @@
+#define MIDLOG_IN_PLINE_C
 /* $NHDT-Header: NetHack 5.0 pline.c 2026/06/20_22:26:43 NetHack-5.0:1.152 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2018. */

@@ -3,6 +3,7 @@
 /*-Copyright (c) Derek S. Ray, 2015. */
 /* NetHack may be freely redistributed.  See license for details. */
 
+#define MIDLOG_IN_HACK_C
 #include "hack.h"
 #include "extern.h"
 
@@ -406,8 +407,10 @@ moverock_core(coordxy sx, coordxy sy)
                 There("is a boulder in your way.");
                 /* use a move if hero learns something; see test_move() for
                    how/why 'context.door_opened' is being dragged into this */
-                if (glyph_at(sx, sy) != oldglyph)
+                if (glyph_at(sx, sy) != oldglyph) {
                     svc.context.door_opened = svc.context.move = TRUE;
+                    event_log("ctx_move[%s=%d umv=%d]", __func__, (int)svc.context.move, u.umovement);
+                }
                 res = -1; /* don't move to <sx,sy>, so no soko guilt */
             }
             return res;
@@ -1109,6 +1112,7 @@ test_move(
                         else
                             svc.context.door_opened = !closed_door(x, y);
                         svc.context.move = (ux != u.ux || uy != u.uy);
+                        event_log("ctx_move[%s=%d umv=%d]", __func__, (int)svc.context.move, u.umovement);
                     } else if (x == ux || y == uy) {
                         if (Blind || Stunned || ACURR(A_DEX) < 10
                             || Fumbling) {
@@ -1125,6 +1129,7 @@ test_move(
                                return False and without having 'door_opened'
                                set, 'move' would get reset by caller */
                             svc.context.door_opened = svc.context.move = TRUE;
+                            event_log("ctx_move[%s=%d umv=%d]", __func__, (int)svc.context.move, u.umovement);
                             /* since we've just lied about successfully
                                moving, we need to manually stop running */
                             nomul(0);
@@ -1265,6 +1270,9 @@ test_move(
 staticfn boolean
 findtravelpath(int mode)
 {
+    event_log("travel_start[mode=%d ux=%d uy=%d tx=%d ty=%d travel1=%d]",
+              mode, (int)u.ux, (int)u.uy, (int)u.tx, (int)u.ty,
+              svc.context.travel1 ? 1 : 0);
     if (!gt.travelmap)
         gt.travelmap = selection_new();
     /* if travel to adjacent, reachable location, use normal movement rules */
@@ -2501,8 +2509,10 @@ avoid_running_into_trap_or_liquid(coordxy x, coordxy y)
     if (avoid_moving_on_trap(x,y, would_stop)
         || (Blind && avoid_moving_on_liquid(x,y, would_stop))) {
         nomul(0);
-        if (would_stop)
+        if (would_stop) {
             svc.context.move = 0;
+            event_log("ctx_move[%s=%d umv=%d]", __func__, (int)svc.context.move, u.umovement);
+        }
         return would_stop;
     }
     return FALSE;
@@ -2545,6 +2555,7 @@ avoid_trap_andor_region(coordxy x, coordxy y)
         if (!paranoid_query(ParanoidConfirm, upstart(qbuf))) {
             nomul(0);
             svc.context.move = 0;
+            event_log("ctx_move[%s=%d umv=%d]", __func__, (int)svc.context.move, u.umovement);
             return TRUE;
         }
     }
@@ -2575,6 +2586,7 @@ avoid_trap_andor_region(coordxy x, coordxy y)
         if (!paranoid_query(ParanoidConfirm, qbuf)) {
             nomul(0);
             svc.context.move = 0;
+            event_log("ctx_move[%s=%d umv=%d]", __func__, (int)svc.context.move, u.umovement);
             return TRUE;
         }
     }
@@ -2606,6 +2618,7 @@ move_out_of_bounds(coordxy x, coordxy y)
         }
         nomul(0);
         svc.context.move = 0;
+        event_log("ctx_move[%s=%d umv=%d]", __func__, (int)svc.context.move, u.umovement);
         return TRUE;
     }
     return FALSE;
@@ -2772,6 +2785,7 @@ domove_core(void)
                                 || sensemon(mtmp))) {
                 nomul(0);
                 svc.context.move = 0;
+                event_log("ctx_move[%s=%d umv=%d]", __func__, (int)svc.context.move, u.umovement);
                 return;
             }
         }
@@ -2831,7 +2845,7 @@ domove_core(void)
             boolean moved = trapmove(x, y, (struct trap *) NULL);
 
             if (!u.utrap) {
-                disp.botl = TRUE;
+                SET_BOTL();
                 reset_utrap(TRUE); /* might resume levitation or flight */
             }
             /* might not have escaped, or did escape but remain in the same
@@ -2843,6 +2857,7 @@ domove_core(void)
         if (!test_move(u.ux, u.uy, x - u.ux, y - u.uy, DO_MOVE)) {
             if (!svc.context.door_opened) {
                 svc.context.move = 0;
+                event_log("ctx_move[%s=%d umv=%d]", __func__, (int)svc.context.move, u.umovement);
                 nomul(0);
             }
             return;
@@ -2851,6 +2866,7 @@ domove_core(void)
         /* Is it dangerous to swim in water or lava? */
         if (swim_move_danger(x, y)) {
             svc.context.move = 0;
+            event_log("ctx_move[%s=%d umv=%d]", __func__, (int)svc.context.move, u.umovement);
             nomul(0);
             return;
         }
@@ -3039,7 +3055,7 @@ overexert_hp(void)
 
     if (*hp > 1) {
         *hp -= 1;
-        disp.botl = TRUE;
+        SET_BOTL();
     } else {
         You("pass out from exertion!");
         exercise(A_CON, FALSE);
@@ -3168,7 +3184,7 @@ classify_terrain(void)
         iflags.terrain_typ = typ;
         /* request a status update unless hero is running */
         if (flags.terrainstatus && !svc.context.run)
-            disp.botl = TRUE;
+            SET_BOTL();
     }
 }
 
@@ -3211,7 +3227,7 @@ switch_terrain(void)
             You("start flying.");
     }
     if ((!!Levitation ^ was_levitating) || (!!Flying ^ was_flying))
-        disp.botl = TRUE; /* update Lev/Fly status condition */
+        SET_BOTL(); /* update Lev/Fly status condition */
 
     if (flags.terrainstatus)
         classify_terrain();
@@ -4135,7 +4151,7 @@ end_running(boolean and_travel)
     if (svc.context.run) {
         svc.context.run = 0;
         if (flags.time)
-            disp.time_botl = TRUE;
+            SET_TIME_BOTL();
         /* classify_terrain() suppresses setting disp.botl when
            running; after that, it can no longer compare current terrain
            against iflaga.terrain_typ to detect a change, so recompute */
@@ -4154,8 +4170,10 @@ end_running(boolean and_travel)
         gt.travelmap = NULL;
     }
     /* cancel multi */
-    if (gm.multi > 0)
+    if (gm.multi > 0) {
         gm.multi = 0;
+        event_log("multi[%s=%d]", __func__, (int)gm.multi);
+    }
 }
 
 void
@@ -4167,6 +4185,7 @@ nomul(int nval)
     u.uinvulnerable = FALSE; /* Kludge to avoid ctrl-C bug -dlc */
     u.usleep = 0;
     gm.multi = nval;
+    event_log("multi[%s=%d]", __func__, (int)gm.multi);
     if (nval == 0)
         gm.multi_reason = NULL, gm.multireasonbuf[0] = '\0';
     end_running(TRUE);
@@ -4177,7 +4196,7 @@ nomul(int nval)
 void
 unmul(const char *msg_override)
 {
-    disp.botl = TRUE;
+    SET_BOTL();
     gm.multi = 0; /* caller will usually have done this already */
     if (msg_override)
         gn.nomovemsg = msg_override;
@@ -4263,7 +4282,7 @@ losehp(int n, const char *knam, schar k_format)
         return;
     }
 #endif
-    disp.botl = TRUE; /* u.uhp or u.mh is changing */
+    SET_BOTL(); /* u.uhp or u.mh is changing */
     end_running(TRUE);
     if (Upolyd) {
         u.mh -= n;

@@ -392,7 +392,7 @@ fix_worst_trouble(int trouble)
         }
         You("can breathe again.");
         Strangled = 0;
-        disp.botl = TRUE;
+        SET_BOTL();
         break;
     case TROUBLE_LAVA:
         /* teleport should always succeed, but if not, just untrap them */
@@ -408,7 +408,7 @@ fix_worst_trouble(int trouble)
     case TROUBLE_HUNGRY:
         Your("%s feels content.", body_part(STOMACH));
         init_uhunger();
-        disp.botl = TRUE;
+        SET_BOTL();
         break;
     case TROUBLE_SICK:
         You_feel("better.");
@@ -435,14 +435,14 @@ fix_worst_trouble(int trouble)
         setuhpmax(max(maxhp, 5 + 1), TRUE);
         u.uhp = u.uhpmax; /* setuhpmax() will do this when u.uhp is higher
                            * than u.uhpmax; prayer also does this if lower */
-        disp.botl = TRUE;
+        SET_BOTL();
         break;
     case TROUBLE_COLLAPSING:
         /* override Fixed_abil; uncurse that if feasible */
         You_feel("%sstronger.",
                  (AMAX(A_STR) - ABASE(A_STR) > 6) ? "much " : "");
         ABASE(A_STR) = AMAX(A_STR);
-        disp.botl = TRUE;
+        SET_BOTL();
         if (Fixed_abil) {
             if ((otmp = stuck_ring(uleft, RIN_SUSTAIN_ABILITY)) != 0) {
                 if (otmp == uleft)
@@ -547,7 +547,7 @@ fix_worst_trouble(int trouble)
         for (i = 0; i < A_MAX; i++) {
             if (ABASE(i) < AMAX(i)) {
                 ABASE(i) = AMAX(i);
-                disp.botl = TRUE;
+                SET_BOTL();
             }
         }
         encumber_msg();
@@ -1263,7 +1263,7 @@ pleased(aligntyp g_align)
                 u.mh = u.mhmax;
             if (ABASE(A_STR) < AMAX(A_STR)) {
                 ABASE(A_STR) = AMAX(A_STR);
-                disp.botl = TRUE; /* before potential message */
+                SET_BOTL(); /* before potential message */
                 encumber_msg();
             }
             if (u.uhunger < 900)
@@ -1278,7 +1278,7 @@ pleased(aligntyp g_align)
                rather than issuing a pat-on-head */
             u.ucreamed = 0;
             make_blinded(0L, TRUE);
-            disp.botl = TRUE;
+            SET_BOTL();
             break;
         case 4: {
             struct obj *otmp, *nextobj;

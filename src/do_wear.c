@@ -238,7 +238,7 @@ Boots_on(void)
                                * so uarmf could be Null below; status line
                                * gets updated during brief interval they're
                                * worn so hero and player learn enchantment */
-            disp.botl = TRUE; /* status hilites might mark AC changed */
+            SET_BOTL(); /* status hilites might mark AC changed */
             makeknown(uarmf->otyp);
             float_up();
             if (Levitation)
@@ -456,7 +456,7 @@ Helmet_on(void)
            but it takes trained arrogance to pull it off, and the actual
            enchantment of the hat is irrelevant */
         ABON(A_CHA) += (Role_if(PM_WIZARD) ? 1 : -1);
-        disp.botl = TRUE;
+        SET_BOTL();
         makeknown(uarmh->otyp);
         break;
     case HELM_OF_OPPOSITE_ALIGNMENT:
@@ -489,7 +489,7 @@ Helmet_on(void)
             else if (uarmh->bknown)
                 update_inventory(); /* keep bknown as-is; display the curse */
         }
-        disp.botl = TRUE; /* reveal new alignment or INT & WIS */
+        SET_BOTL(); /* reveal new alignment or INT & WIS */
         if (Hallucination) {
             pline("My brain hurts!"); /* Monty Python's Flying Circus */
         } else if (uarmh && uarmh->otyp == DUNCE_CAP) {
@@ -531,12 +531,12 @@ Helmet_off(void)
     case ORCISH_HELM:
         break;
     case DUNCE_CAP:
-        disp.botl = TRUE;
+        SET_BOTL();
         break;
     case CORNUTHAUM:
         if (!svc.context.takeoff.cancelled_don) {
             ABON(A_CHA) += (Role_if(PM_WIZARD) ? -1 : 1);
-            disp.botl = TRUE;
+            SET_BOTL();
         }
         break;
     case HELM_OF_TELEPATHY:
@@ -587,7 +587,7 @@ Gloves_on(void)
         break;
     case GAUNTLETS_OF_POWER:
         makeknown(uarmg->otyp);
-        disp.botl = TRUE; /* taken care of in attrib.c */
+        SET_BOTL(); /* taken care of in attrib.c */
         break;
     case GAUNTLETS_OF_DEXTERITY:
         adj_abon(uarmg, uarmg->spe);
@@ -661,7 +661,7 @@ Gloves_off(void)
         break;
     case GAUNTLETS_OF_POWER:
         makeknown(uarmg->otyp);
-        disp.botl = TRUE; /* taken care of in attrib.c */
+        SET_BOTL(); /* taken care of in attrib.c */
         break;
     case GAUNTLETS_OF_DEXTERITY:
         if (!svc.context.takeoff.cancelled_don)
@@ -696,7 +696,7 @@ Gloves_off(void)
         wielding_corpse(uswapwep, gloves, on_purpose);
 
     if (condtests[bl_bareh].enabled)
-        disp.botl = TRUE;
+        SET_BOTL();
 
     return 0;
 }
@@ -1016,7 +1016,7 @@ Amulet_on(struct obj *amul)
         /* Don't use same message as polymorph */
         if (new_sex != orig_sex) {
             newsym(u.ux, u.uy); /* glyphmon flag and tile have changed */
-            disp.botl = TRUE; /* role name or rank title might have changed */
+            SET_BOTL(); /* role name or rank title might have changed */
             You("are suddenly very %s!",
                 flags.female ? "feminine" : "masculine");
         } else {
@@ -1038,7 +1038,7 @@ Amulet_on(struct obj *amul)
         if (can_be_strangled(&gy.youmonst) && !Strangled) {
             makeknown(AMULET_OF_STRANGULATION);
             Strangled = 6L;
-            disp.botl = TRUE;
+            SET_BOTL();
             on_msg(uamul);
             on_msg_done = TRUE;
             pline("It constricts your throat!");
@@ -1069,7 +1069,7 @@ Amulet_on(struct obj *amul)
                 makeknown(AMULET_OF_FLYING);
                 on_msg(uamul);
                 on_msg_done = TRUE;
-                disp.botl = TRUE; /* status: 'Fly' On */
+                SET_BOTL(); /* status: 'Fly' On */
                 You("are now in flight.");
             }
         }
@@ -1138,7 +1138,7 @@ Amulet_off(void)
 
         if (Strangled) {
             Strangled = 0L;
-            disp.botl = TRUE;
+            SET_BOTL();
             if (Breathless)
                 Your("%s is no longer constricted!", body_part(NECK));
             else
@@ -1163,7 +1163,7 @@ Amulet_off(void)
 
         float_vs_flight(); /* probably not needed here */
         if (was_flying && !Flying) {
-            disp.botl = TRUE; /* status: 'Fly' Off */
+            SET_BOTL(); /* status: 'Fly' Off */
             You("%s.", (is_pool_or_lava(u.ux, u.uy)
                         || Is_waterlevel(&u.uz) || Is_airlevel(&u.uz))
                           ? "stop flying"
@@ -1235,7 +1235,7 @@ adjust_attrib(struct obj *obj, int which, int val)
         already discovered, both handled by learnring()] */
     if (observable || !extremeattr(which))
         learnring(obj, observable);
-    disp.botl = TRUE;
+    SET_BOTL();
 }
 
 void
@@ -1679,6 +1679,7 @@ cancel_don(void)
     ga.afternmv = (int (*)(void)) 0;
     gn.nomovemsg = (char *) 0;
     gm.multi = 0;
+    event_log("multi[%s=%d]", __func__, (int)gm.multi);
     svc.context.takeoff.delay = 0;
     svc.context.takeoff.what = 0L;
 }
@@ -2233,7 +2234,7 @@ accessory_or_armor_on(struct obj *obj)
                 You("are suddenly overcome with shame and change your mind.");
             u.ublessed = 0; /* lose your god's protection */
             makeknown(obj->otyp);
-            disp.botl = TRUE; /* for AC after zeroing u.ublessed */
+            SET_BOTL(); /* for AC after zeroing u.ublessed */
             return ECMD_TIME;
         }
     } else {
@@ -2507,7 +2508,7 @@ find_ac(void)
 
     if (uac != u.uac) {
         u.uac = uac;
-        disp.botl = TRUE;
+        SET_BOTL();
 #if 0
         /* these could conceivably be achieved out of order (by being near
            threshold and putting on +N dragon scale mail from bones, for
@@ -3323,7 +3324,7 @@ adj_abon(struct obj *otmp, schar delta)
             makeknown(uarmg->otyp);
             ABON(A_DEX) += (delta);
         }
-        disp.botl = TRUE;
+        SET_BOTL();
     }
     if (uarmh && uarmh == otmp && otmp->otyp == HELM_OF_BRILLIANCE) {
         if (delta) {
@@ -3331,7 +3332,7 @@ adj_abon(struct obj *otmp, schar delta)
             ABON(A_INT) += (delta);
             ABON(A_WIS) += (delta);
         }
-        disp.botl = TRUE;
+        SET_BOTL();
     }
 }
 

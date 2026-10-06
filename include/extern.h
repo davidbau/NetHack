@@ -2822,6 +2822,16 @@ extern boolean rng_log_enabled(void);
 extern void rng_log_set_caller(const char *, int, const char *);
 extern int rng_log_get_call_count(void);
 extern long rng_log_get_position(void);
+extern void midlog_enter(const char *, const char *, int, const char *);
+extern void midlog_exit_int(const char *, int, const char *, int,
+                            const char *);
+extern void midlog_exit_void(const char *, const char *, int,
+                             const char *);
+extern void midlog_exit_ptr(const char *, const void *, const char *, int,
+                            const char *);
+/* Event logging for differential-debug instrumentation */
+extern const char *event_mon_ref(const struct monst *, int, coordxy, coordxy);
+extern void event_log(const char *, ...) PRINTF_F(1, 2);
 
 /* ### role.c ### */
 

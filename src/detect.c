@@ -8,6 +8,7 @@
  * command.
  */
 
+#define MIDLOG_IN_DETECT_C
 #include "hack.h"
 #include "artifact.h"
 
