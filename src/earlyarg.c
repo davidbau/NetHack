@@ -3,6 +3,7 @@
 /* NetHack may be freely redistributed.  See license for details. */
 
 #include "hack.h"
+#include "livesnap.h"
 #include "dlb.h"
 
 staticfn void debug_fields(char *);
@@ -216,6 +217,25 @@ early_options(int *argc_p, char ***argv_p, char **hackdir_p)
             ++arg;
 
         switch (arg[1]) { /* char after leading dash */
+        case 'a':
+            if (!strcmp(arg, "-adjudicate") || !strcmp(origarg, "--adjudicate")) {
+                livesnap_adj_snap = (argc > 1) ? argv[1] : NULL;
+                livesnap_adj_keys = (argc > 2) ? argv[2] : NULL;
+                livesnap_adj_out = (argc > 3) ? argv[3] : NULL;
+                if (!livesnap_adj_snap) {
+                    fprintf(stderr, "Usage: --adjudicate <snap.json> [keys] [out_snap.json]\n");
+                    exit(1);
+                }
+                consume_arg(ndx, argc_p, argv_p);
+                consume_arg(ndx, argc_p, argv_p);
+                if (livesnap_adj_keys)
+                    consume_arg(ndx, argc_p, argv_p);
+                if (livesnap_adj_out)
+                    consume_arg(ndx, argc_p, argv_p);
+                consumed = 1;
+                return;
+            }
+            break;
         case 'b':
 #ifdef CRASHREPORT
             // --bidshow

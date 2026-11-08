@@ -9,7 +9,7 @@ staticfn int eatmdone(void);
 staticfn int eatfood(void);
 staticfn struct obj *costly_tin(int);
 staticfn int opentin(void);
-staticfn int unfaint(void);
+int unfaint(void);
 
 staticfn const char *food_xname(struct obj *, boolean);
 staticfn void choke(struct obj *);
@@ -3347,7 +3347,7 @@ lesshungry(int num)
     newuhs(FALSE);
 }
 
-staticfn int
+int
 unfaint(void)
 {
     (void) Hear_again();

@@ -978,6 +978,7 @@ extern void morehungry(int);
 extern void lesshungry(int);
 extern boolean is_fainted(void);
 extern void reset_faint(void);
+extern int unfaint(void);
 extern int corpse_intrinsic(struct permonst *) NONNULLARG1;
 extern void violated_vegetarian(void);
 extern void newuhs(boolean);

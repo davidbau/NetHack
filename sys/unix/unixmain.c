@@ -6,6 +6,7 @@
 /* main.c - Unix NetHack */
 
 #include "hack.h"
+#include "livesnap.h"
 #include "dlb.h"
 
 #include <sys/stat.h>
@@ -312,9 +313,25 @@ main(int argc, char *argv[])
             ask_about_panic_save();
 #endif
 
-        /* no save file; start a new game */
-        newgame();
-        wd_message();
+        if (livesnap_adj_snap) {
+            exit(run_livesnap_adjudication(livesnap_adj_snap, livesnap_adj_keys, livesnap_adj_out));
+        }
+
+        const char *ls_env = nh_getenv("NETHACK_LIVESNAP_RESTORE");
+        if (ls_env && *ls_env) {
+            if (restore_livesnap_from_file(ls_env)) {
+                resuming = TRUE;
+            } else {
+                raw_printf("[livesnap] FAILED to restore from %s\n", ls_env);
+                exit(1);
+            }
+        }
+
+        if (!resuming) {
+            /* no save file; start a new game */
+            newgame();
+            wd_message();
+        }
     }
 
     /* moveloop() never returns but isn't flagged NORETURN */

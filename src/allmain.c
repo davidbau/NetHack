@@ -6,6 +6,7 @@
 /* various code that was replicated in *main.c */
 
 #include "hack.h"
+#include "livesnap.h"
 
 #ifndef NO_SIGNAL
 #include <signal.h>
@@ -591,6 +592,17 @@ moveloop_core(void)
 #ifdef MAIL
         ckmailstatus();
 #endif
+        {
+            const char *ls_dump = nh_getenv("NETHACK_LIVESNAP_DUMP");
+            if (ls_dump && *ls_dump) {
+                save_livesnap_to_file(ls_dump);
+                const char *ls_exit = nh_getenv("NETHACK_LIVESNAP_EXIT");
+                if (ls_exit && *ls_exit && strcmp(ls_exit, "0") != 0) {
+                    clearlocks();
+                    nh_terminate(EXIT_SUCCESS);
+                }
+            }
+        }
         RUNSTEP_EVENT("fresh_cmd", 0);
         rhack(0);
     }
